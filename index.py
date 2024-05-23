@@ -5,7 +5,7 @@ import os
 import shutil
 from bilibili_api import sync, video_uploader, Credential
 from flask import Flask, session, render_template, redirect, url_for, flash
-from utils import clear_static_directory, get_file_size 
+from utils import clear_static_directory, get_file_size, get_youtube_info
 from download import YouTubeDownloadForm
 from upload import BilibiliUploadForm
 
@@ -35,19 +35,10 @@ def index():
 
         clear_static_directory(session['save_dir'])
 
-        # print("获取视频标题...")
-
-        # cmd = ["yt-dlp", "--get-title", video_url]
-        # try:
-        #     title_output = subprocess.check_output(cmd, text=True)
-        #     video_title = title_output.strip()  # 获取并清理标题
-        #     session['video_title'] = video_title  # 存储到session
-        #     print("视频标题已获取!", "success")
-        #     return redirect(url_for('preview'))
-        # except subprocess.CalledProcessError as e:
-        #     print(f"获取视频标题失败: {e.output}", "danger")
-
-        print("开始下载...");
+        print("获取视频标题...")
+        session['origin_title'] = get_youtube_info(video_url)["title"]
+         
+        print("开始下载...", session['origin_title']);
 
         cmd = [
             "yt-dlp",
@@ -103,7 +94,7 @@ def preview():
 
 @app.route('/upload', methods=['GET', 'POST'])  
 async def upload():
-    form = BilibiliUploadForm()
+    form = BilibiliUploadForm(title=session['origin_title'])
 
     video_path = f"./{session['save_dir']}/{session['save_video']}"
     thumbnail_path = f"./{session['save_dir']}/{session['save_cover']}"
