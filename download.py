@@ -10,4 +10,4 @@ class YouTubeDownloadForm(FlaskForm):
         ('480', '480p'),
         ('360', '360p'),
     ], default='720')
-    submit = SubmitField('Download')
+    submit = SubmitField('下载')

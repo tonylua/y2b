@@ -5,7 +5,7 @@ import os
 import shutil
 from bilibili_api import sync, video_uploader, Credential
 from flask import Flask, session, render_template, redirect, url_for, flash
-from utils import clear_static_directory, get_file_size, get_youtube_info
+from utils import run_cli_command, clear_static_directory, get_file_size, get_youtube_info, cleaned_text
 from download import YouTubeDownloadForm
 from upload import BilibiliUploadForm
 
@@ -37,25 +37,21 @@ def index():
 
         print("获取视频标题...")
         session['origin_title'] = get_youtube_info(video_url)["title"]
-         
-        print("开始下载...", session['origin_title']);
+        
+        # TODO threading 进度条
 
-        cmd = [
-            "yt-dlp",
+        print("开始下载...", session['origin_title']);
+        run_cli_command('yt-dlp', [
             "--write-auto-subs",
             "--sub-langs", "en,zh-Hans",
             "--convert-subs", "srt",
             "--write-thumbnail",
             "-P", f"./{session['save_dir']}",
-            "-f", "bv*[height<={resolution}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]".format(resolution=resolution),
+            "-f", f"bv*[height<={resolution}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
             "-o", session['save_video'],
             video_url
-        ]
-        try:
-            subprocess.run(cmd, check=True, text=True, capture_output=True)
-            print("视频下载成功!", "success")
-        except subprocess.CalledProcessError as e:
-            print(f"视频下载失败: {e.stderr}", "danger")
+        ])
+
         return redirect(url_for('preview'))  
     
     return render_template('download.html', form=form)
@@ -97,19 +93,31 @@ async def upload():
     form = BilibiliUploadForm(title=session['origin_title'])
 
     video_path = f"./{session['save_dir']}/{session['save_video']}"
+    video_with_srt_path = f"./{session['save_dir']}/with_srt_{session['save_video']}"
     thumbnail_path = f"./{session['save_dir']}/{session['save_cover']}"
     subtitles_en_path = f"./{session['save_dir']}/{session['save_srt_en']}"
     subtitles_en_exist = os.path.exists(subtitles_en_path)
 
-    title = form.title.data
-    if (subtitles_en_exist):
-        title = f"[英字] {title}"
-
     # TODO 字幕 https://github.com/Nemo2011/bilibili-api/issues/748
+    # ffmpeg -i static/video.mp4 -vf "subtitles=static/video.en.srt" -c:a copy static/video_with_srt.mp4
 
     # TODO 加结尾
 
     if form.validate_on_submit():
+
+        title = form.title.data
+        if (subtitles_en_exist):
+            title = f"[英字] {title}"
+            print("加字幕...")
+            run_cli_command('ffmpeg', [
+                "-i", video_path,
+                "-vf",
+                f"subtitles={subtitles_en_path}",
+                "-c:a",
+                "copy",
+                video_with_srt_path
+            ])
+
         args = {
             "sessdata": form.sessdata.data,
             "bili_jct": form.bili_jct.data,
@@ -121,13 +129,13 @@ async def upload():
             original = True, # TODO 设置转载报错
             source = 'youtube',
             no_reprint = True,
-            title = title, 
+            title = cleaned_text(title), 
             tags = form.tags.data.split(',') if len(form.tags.data) else ['youtube'], 
             desc = form.desc.data, 
             cover = form.cover.data if form.cover.data else thumbnail_path
         )
         page = video_uploader.VideoUploaderPage(
-            path = video_path,
+            path = video_with_srt_path if subtitles_en_exist else video_path,
             title = form.title.data,
             description = form.desc.data
         )
@@ -137,6 +145,7 @@ async def upload():
         async def ev(data):
             print(data)
 
+        print("开始上传...");
         await uploader.start()
 
         return redirect(url_for('index'))
