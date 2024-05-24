@@ -131,7 +131,7 @@ async def upload():
             no_reprint = True,
             title = cleaned_text(title), 
             tags = form.tags.data.split(',') if len(form.tags.data) else ['youtube'], 
-            desc = form.desc.data, 
+            desc = form.desc.data if form.desc.data else f"via. {session['video_url']}", 
             cover = form.cover.data if form.cover.data else thumbnail_path
         )
         page = video_uploader.VideoUploaderPage(
