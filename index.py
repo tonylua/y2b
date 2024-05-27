@@ -28,13 +28,17 @@ def index():
     try:
         bili = AccountUtil(config_path="./bili_cookie.json")
         bili_cookies = bili.verify_cookie()
-        for key, value in bili_cookies.items():
-            session[key] = value
-        print("登录信息有效：%s" % session['user_name'])
+        # for key, value in bili_cookies.items():
+        #     session[key] = value
+        print("登录信息有效：%s" % bili_cookies['user_name'])
     except Exception as e:
         raise(e)
 
-    form = YouTubeDownloadForm()
+    form = YouTubeDownloadForm(
+        sessdata=bili_cookies['SESSDATA'],
+        bili_jct=bili_cookies['bili_jct'],
+        buvid3=bili_cookies['buvid3']
+    )
     if form.validate_on_submit():
 
         video_url = form.video_url.data
@@ -42,6 +46,9 @@ def index():
 
         session['video_url'] = video_url
         session['resolution'] = resolution
+        session['SESSDATA'] = form.sessdata.data
+        session['bili_jct'] = form.bili_jct.data
+        session['buvid3'] = form.buvid3.data
 
         clear_static_directory(session['save_dir'])
 
