@@ -13,21 +13,23 @@
         {{ form.csrf_token }}
 
         {% for field in form if field.name != 'csrf_token' %}
-            <div class="form-group{% if field.errors %} has-error{% endif %}">
-                {{ field.label(class="form-control-label") }}<br>
-                {% if field.type == 'FileField' %}
-                    {{ field(class="form-control-file") }}
-                {% else %}
-                    {{ field(class="form-control") }}
-                {% endif %}
-                {% if field.errors %}
-                    <ul class="errors">
-                        {% for error in field.errors %}
-                            <li>{{ error }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            </div>
+            {% if field.type != 'HiddenField' %}
+                <div class="form-group{% if field.errors %} has-error{% endif %}">
+                    {{ field.label(class="form-control-label") }}<br>
+                    {% if field.type == 'FileField' %}
+                        {{ field(class="form-control-file") }}
+                    {% else %}
+                        {{ field(class="form-control") }}
+                    {% endif %}
+                    {% if field.errors %}
+                        <ul class="errors">
+                            {% for error in field.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endif %}
         {% endfor %}
 
         <button type="submit" class="btn btn-primary">Submit</button>
