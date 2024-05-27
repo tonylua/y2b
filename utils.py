@@ -36,6 +36,20 @@ def clean_reship_url(url, keep_query_key='v'):
     except Exception as e:
         raise ValueError(f"Invalid URL or error processing it: {e}")
 
+def truncate_str(s, n, ellipsis='...'):
+    """
+    截断字符串至指定长度，并在末尾追加指定的省略号（默认为 '...'）。
+    
+    :param s: 原始字符串。
+    :param n: 截断后的最大长度。
+    :param ellipsis: 超过长度后追加的省略号，默认为 '...'。
+    :return: 截断后的字符串。
+    """
+    if len(s) > n:
+        return s[:n] + ellipsis
+    else:
+        return s
+
 def run_cli_command(command_name, args_list):
     """
     实时执行命令行命令并打印输出，同时处理异常情况。

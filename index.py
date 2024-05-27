@@ -5,7 +5,7 @@ import os
 import shutil
 from bilibili_api import sync, video_uploader, Credential
 from flask import Flask, session, render_template, redirect, url_for, flash
-from utils import AccountUtil, run_cli_command, clear_static_directory, get_file_size, get_youtube_info, cleaned_text, clean_reship_url
+from utils import AccountUtil, run_cli_command, clear_static_directory, get_file_size, get_youtube_info, cleaned_text, clean_reship_url, truncate_str
 from download import YouTubeDownloadForm
 from upload import BilibiliUploadForm
 
@@ -132,7 +132,7 @@ async def upload():
                 "copy",
                 video_with_srt_path
             ])
-        cleaned_text(title)[:70]
+        title = truncate_str(cleaned_text(title), 75)
 
         args = {
             "sessdata": form.sessdata.data,

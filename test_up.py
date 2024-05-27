@@ -1,24 +1,30 @@
 from bilibili_api import sync, video_uploader, channel_series, Credential
+from utils import AccountUtil, truncate_str
 
 async def main():
+    bili = AccountUtil(config_path="./bili_cookie.json")
+    info = bili.verify_cookie()
+
+    title = input("%s，请输入视频标题：" % info['user_name'])
+    title = truncate_str(title, 75)
 
     credential_args = {
-        "sessdata": "9e922d3e%2C1731980286%2Caff7a%2A52CjCgRPRYqstg4NpsvFe1t38d8ubJsYRC0uktnayrPadatkQPbOs9auaF0v-DQb_PvP8SVlZnTGV5LVRjSVY4d0pobXNTalhrbzg2Z2lyZWUtdGtkMU1kME1tbUxhRTBpMUFnV0xvVWtWU0JMNXpOMl9oMmpiZUtfM1pOMXRxc1o2NXlTdWxnN3N3IIEC",
-        "bili_jct": "7befea972c4dca03cf48d4fa88715350",
-        "buvid3": "9EFE8179-BC6D-6E30-1F14-3729A77033B863745infoc"
+        "sessdata": info['SESSDATA'],
+        "bili_jct": info['bili_jct'],
+        "buvid3": info['buvid3']
     }
     credential = Credential(**credential_args)
     vu_meta = video_uploader.VideoMeta(
         tid = 231, 
-        title = '[英字] How to Create a Flask + React Project | Python Backend + React Frontend', 
+        title = title, 
         tags = ['youtube'], 
-        desc = '', 
+        desc = 'via. youtube', 
         cover = 'static/video.webp',
         no_reprint = True
     )
     page = video_uploader.VideoUploaderPage(
         path = 'static/with_srt_video.mp4',
-        title = '[英字] How to Create a Flask + React Project | Python Backend + React Frontend',
+        title = title,
         description='', 
     )
     uploader = video_uploader.VideoUploader([page], vu_meta, credential)
