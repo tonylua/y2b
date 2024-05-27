@@ -9,7 +9,7 @@ from utils import AccountUtil, run_cli_command, clear_static_directory, get_file
 from download import YouTubeDownloadForm
 from upload import BilibiliUploadForm
 
-app = Flask(__name__, template_folder='./templates')
+app = Flask(__name__, template_folder='/root/move_video/templates')
 app.config['SECRET_KEY'] = secrets.token_urlsafe(32) 
 app.config['SESSION_TYPE'] = 'filesystem'
 
@@ -26,7 +26,7 @@ def index():
     session['save_srt_cn'] = 'video.zh-Hans.srt'
 
     try:
-        bili = AccountUtil(config_path="./bili_cookie.json")
+        bili = AccountUtil(config_path="/root/move_video/bili_cookie.json")
         bili_cookies = bili.verify_cookie()
         # for key, value in bili_cookies.items():
         #     session[key] = value

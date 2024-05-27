@@ -2,7 +2,7 @@ from bilibili_api import sync, video_uploader, channel_series, Credential
 from utils import AccountUtil, truncate_str
 
 async def main():
-    bili = AccountUtil(config_path="./bili_cookie.json")
+    bili = AccountUtil(config_path="/root/move_video/bili_cookie.json")
     info = bili.verify_cookie()
 
     title = input("%s，请输入视频标题：" % info['user_name'])
