@@ -2,7 +2,39 @@ import os
 import re
 import shutil
 import subprocess
+import requests
+from json import JSONDecodeError
+import json
+import re
+from _exception import CookieException, ExceptionEnum
 from yt_dlp import YoutubeDL
+from urllib.parse import urlparse, urlencode, parse_qs, ParseResult
+
+def clean_reship_url(url, keep_query_key='v'):
+    """
+    修改URL，仅保留指定的查询参数（默认为'v'），其余查询参数移除。
+    
+    :param url: 原始URL字符串
+    :param keep_query_key: 要保留的查询参数的键，默认为'v'
+    :return: 修改后的URL字符串
+    """
+    try:
+        parsed_url = urlparse(url)
+        query_params = parse_qs(parsed_url.query)
+        # 仅保留指定的查询参数
+        filtered_query_params = {k: v for k, v in query_params.items() if k == keep_query_key}
+        # 重新构造URL
+        new_url = ParseResult(
+            scheme=parsed_url.scheme,
+            netloc=parsed_url.netloc,
+            path=parsed_url.path,
+            params=parsed_url.params,
+            query=urlencode(filtered_query_params, doseq=True) if filtered_query_params else '',
+            fragment=parsed_url.fragment
+        ).geturl()
+        return new_url
+    except Exception as e:
+        raise ValueError(f"Invalid URL or error processing it: {e}")
 
 def run_cli_command(command_name, args_list):
     """
@@ -115,3 +147,50 @@ def get_youtube_info(video_url):
             "id": video_id, 
             "title": cleaned_text(title)
         }
+
+# https://github.com/SP-FA/autoBilibili
+class AccountUtil:
+    def __init__(self, config_path: str):
+        """
+        config_path 需要将 Cookie 信息填入一个配置文件 config.json 中，文件需要以下字段：
+        {
+            "uid": "",
+            "SESSDATA": "",
+            "bili_jct": "",
+            "buvid3": ""
+        }
+        """
+        try:
+            with open(config_path) as f:
+                cookie = json.load(f)
+            self.uid = cookie['uid']
+            self.session = requests.session()
+            self.session.cookies['SESSDATA'] = cookie['SESSDATA']
+            self.session.cookies['bili_jct'] = cookie['bili_jct']
+            self.session.cookies['buvid3'] = cookie['buvid3']
+        except (KeyError, JSONDecodeError):
+            raise CookieException(ExceptionEnum.COOKIE_CONFIG_ERR, 'Cookies are not configured in ' + config_path)
+        self.headers = {
+            'origin': 'https://space.bilibili.com',
+            'User-Agent': "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/39.0.2171.95 Safari/537.36"
+        }
+    def verify_cookie(self):
+        """
+        Verify that Cookies are available
+
+        EXCEPTION:
+          CookieException
+          @ errno 0: invalid Cookie
+          @ errno 1: Cookies are not configured in the init method correctly
+        """
+        url = 'https://space.bilibili.com/%s/favlist' % self.uid
+        homePage = self.session.get(url, headers=self.headers)
+        home_page = homePage.content.decode("utf-8")
+        if '个人空间' not in home_page:
+            raise CookieException(ExceptionEnum.INVALID_COOKIE_ERR, 'Invalid Cookie.')
+        user_name = re.findall(r'关注(.*)账号', home_page)[0]
+        # print('Valid Cookie, user name: %s' % user_name)
+        self.session.cookies['user_name'] = user_name
+        return self.session.cookies
+

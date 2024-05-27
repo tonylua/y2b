@@ -5,7 +5,7 @@ import os
 import shutil
 from bilibili_api import sync, video_uploader, Credential
 from flask import Flask, session, render_template, redirect, url_for, flash
-from utils import run_cli_command, clear_static_directory, get_file_size, get_youtube_info, cleaned_text
+from utils import AccountUtil, run_cli_command, clear_static_directory, get_file_size, get_youtube_info, cleaned_text, clean_reship_url
 from download import YouTubeDownloadForm
 from upload import BilibiliUploadForm
 
@@ -19,17 +19,27 @@ def setup_session():
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    session['save_dir'] = 'static'
+    session['save_video'] = 'video.mp4'
+    session['save_cover'] = 'video.webp'
+    session['save_srt_en'] = 'video.en.srt'
+    session['save_srt_cn'] = 'video.zh-Hans.srt'
+
+    try:
+        bili = AccountUtil(config_path="./bili_cookie.json")
+        bili_cookies = bili.verify_cookie()
+        for key, value in bili_cookies.items():
+            session[key] = value
+        print("登录信息有效：%s" % session['user_name'])
+    except Exception as e:
+        raise(e)
+
     form = YouTubeDownloadForm()
     if form.validate_on_submit():
 
         video_url = form.video_url.data
         resolution = form.resolution.data
 
-        session['save_dir'] = 'static'
-        session['save_video'] = 'video.mp4'
-        session['save_cover'] = 'video.webp'
-        session['save_srt_en'] = 'video.en.srt'
-        session['save_srt_cn'] = 'video.zh-Hans.srt'
         session['video_url'] = video_url
         session['resolution'] = resolution
 
@@ -90,7 +100,12 @@ def preview():
 
 @app.route('/upload', methods=['GET', 'POST'])  
 async def upload():
-    form = BilibiliUploadForm(title=session['origin_title'])
+    form = BilibiliUploadForm(
+        title=session['origin_title'],
+        sessdata=session['SESSDATA'],
+        bili_jct=session['bili_jct'],
+        buvid3=session['buvid3']
+    )
 
     video_path = f"./{session['save_dir']}/{session['save_video']}"
     video_with_srt_path = f"./{session['save_dir']}/with_srt_{session['save_video']}"
@@ -117,6 +132,7 @@ async def upload():
                 "copy",
                 video_with_srt_path
             ])
+        cleaned_text(title)[:70]
 
         args = {
             "sessdata": form.sessdata.data,
@@ -129,14 +145,14 @@ async def upload():
             original = True, # TODO 设置转载报错
             source = 'youtube',
             no_reprint = True,
-            title = cleaned_text(title), 
+            title = title, 
             tags = form.tags.data.split(',') if len(form.tags.data) else ['youtube'], 
-            desc = form.desc.data if form.desc.data else f"via. {session['video_url']}", 
+            desc = form.desc.data if form.desc.data else f"via. {clean_reship_url(session['video_url'])}", 
             cover = form.cover.data if form.cover.data else thumbnail_path
         )
         page = video_uploader.VideoUploaderPage(
             path = video_with_srt_path if subtitles_en_exist else video_path,
-            title = form.title.data,
+            title = title,
             description = form.desc.data
         )
         uploader = video_uploader.VideoUploader([page], vu_meta, credential)
