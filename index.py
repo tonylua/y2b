@@ -19,7 +19,7 @@ def setup_session():
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    session['save_dir'] = 'static'
+    session['save_dir'] = '/root/move_video/static'
     session['save_video'] = 'video.mp4'
     session['save_cover'] = 'video.webp'
     session['save_srt_en'] = 'video.en.srt'
@@ -63,7 +63,7 @@ def index():
             "--sub-langs", "en,zh-Hans",
             "--convert-subs", "srt",
             "--write-thumbnail",
-            "-P", f"./{session['save_dir']}",
+            "-P", f"{session['save_dir']}",
             "-f", f"bv*[height<={resolution}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
             "-o", session['save_video'],
             video_url
@@ -75,10 +75,10 @@ def index():
 
 @app.route('/preview', methods=['GET', 'POST'])
 def preview():
-    video_path = f"./{session['save_dir']}/{session['save_video']}"
-    thumbnail_path = f"./{session['save_dir']}/{session['save_cover']}"
-    subtitles_en_path = f"./{session['save_dir']}/{session['save_srt_en']}"
-    subtitles_cn_path = f"./{session['save_dir']}/{session['save_srt_cn']}"
+    video_path = f"{session['save_dir']}/{session['save_video']}"
+    thumbnail_path = f"{session['save_dir']}/{session['save_cover']}"
+    subtitles_en_path = f"{session['save_dir']}/{session['save_srt_en']}"
+    subtitles_cn_path = f"{session['save_dir']}/{session['save_srt_cn']}"
     
     video_exists = os.path.exists(video_path)
     thumbnail_exists = os.path.exists(thumbnail_path)
@@ -114,10 +114,10 @@ async def upload():
         buvid3=session['buvid3']
     )
 
-    video_path = f"./{session['save_dir']}/{session['save_video']}"
-    video_with_srt_path = f"./{session['save_dir']}/with_srt_{session['save_video']}"
-    thumbnail_path = f"./{session['save_dir']}/{session['save_cover']}"
-    subtitles_en_path = f"./{session['save_dir']}/{session['save_srt_en']}"
+    video_path = f"{session['save_dir']}/{session['save_video']}"
+    video_with_srt_path = f"{session['save_dir']}/with_srt_{session['save_video']}"
+    thumbnail_path = f"{session['save_dir']}/{session['save_cover']}"
+    subtitles_en_path = f"{session['save_dir']}/{session['save_srt_en']}"
     subtitles_en_exist = os.path.exists(subtitles_en_path)
 
     # TODO 字幕 https://github.com/Nemo2011/bilibili-api/issues/748
