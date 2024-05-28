@@ -3,6 +3,18 @@ import re
 import shutil
 import subprocess
 import re
+import glob
+
+def find_cover_images(directory):
+    """
+    扫描指定目录，查找常见的封面图片格式文件。
+    
+    :param directory: 要扫描的目录路径
+    :return: 第一张封面图的文件路径，如果没有找到则返回None
+    """
+    image_extensions = ['*.webp', '*.jpg', '*.jpeg', '*.png', '*.gif']
+    cover_images = [file for ext in image_extensions for file in glob.glob(os.path.join(directory, ext))]
+    return cover_images[0] if cover_images else None
 
 def run_cli_command(command_name, args_list):
     """
@@ -65,15 +77,15 @@ def run_cli_command(command_name, args_list):
 #             print(error_message)
 #         return False
 
-def clear_static_directory(static_path):
+def clear_video_directory(path):
     """
-    清空指定的静态文件目录。如果目录存在，则先删除再重新创建。
+    清空指定的视频文件目录。如果目录存在，则先删除再重新创建。
     
-    :param static_path: 静态文件目录的路径
+    :param path: 静态文件目录的路径
     """
-    if os.path.exists(static_path):
-        shutil.rmtree(static_path)
-        os.makedirs(static_path)
+    if os.path.exists(path):
+        shutil.rmtree(path)
+        os.makedirs(path)
 
 def get_file_size(file_path):
     """

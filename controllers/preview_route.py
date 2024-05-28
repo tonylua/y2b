@@ -1,22 +1,27 @@
 import os
 from flask import Flask, redirect, url_for, flash, render_template
-from utils.sys import get_file_size
+from utils.sys import get_file_size, find_cover_images
 
 def preview_controller(session):
     video_path = f"{session['save_dir']}/{session['save_video']}"
-    thumbnail_path = f"{session['save_dir']}/{session['save_cover']}"
     subtitles_en_path = f"{session['save_dir']}/{session['save_srt_en']}"
     subtitles_cn_path = f"{session['save_dir']}/{session['save_srt_cn']}"
     
     video_exists = os.path.exists(video_path)
-    thumbnail_exists = os.path.exists(thumbnail_path)
-    subtitles_en_exist = os.path.exists(subtitles_en_path)
-    subtitles_cn_exist = os.path.exists(subtitles_cn_path)
-    
-    if not (video_exists and thumbnail_exists):
-        flash(f"视频或封面未找到，请重新尝试。{video_path}, {thumbnail_path}", "warning")
+    if not (video_exists):
+        flash(f"视频未找到，请重新尝试。{video_path}", "warning")
         return redirect(url_for('index'))
     
+    cover = find_cover_images(session['save_dir'])
+    if not (cover):
+        flash(f"封面未找到，请重新尝试。", "warning")
+        return redirect(url_for('index'))
+    else:
+        session['cover_path'] = cover
+
+    subtitles_en_exist = os.path.exists(subtitles_en_path)
+    subtitles_cn_exist = os.path.exists(subtitles_cn_path)
+
     video_size = get_file_size(video_path)
     session['video_size'] = video_size
 
@@ -28,7 +33,7 @@ def preview_controller(session):
         subtitle_cn_name = session['save_srt_cn']
     
     return render_template('preview.html', 
-        video_path=url_for('static', filename=session['save_video']), 
-        thumbnail_path=url_for('static', filename=session['save_cover']),
+        video_path=url_for('static', filename='video/'+session['save_video']), 
+        thumbnail_path=cover,
         subtitle_en_name=subtitle_en_name,
         subtitle_cn_name=subtitle_cn_name)

@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>视频预览</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="preview-container">
@@ -48,8 +47,10 @@
         {% endif %}
         
         <form action="{{ url_for('upload') }}" method="post">
-            <button type="submit">确定</button>
+            <button type="submit" class="btn btn-primary">下一步</button>
+            <div id="countdown"></div>
         </form>
     </div>
+    <script src="{{ url_for('static', filename='countdown.js') }}" defer></script>
 </body>
 </html>

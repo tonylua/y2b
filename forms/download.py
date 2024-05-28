@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, SubmitField
+from wtforms import RadioField, StringField, SelectField, SubmitField
 from wtforms.validators import DataRequired, URL
 
 class YouTubeDownloadForm(FlaskForm):
@@ -14,4 +14,9 @@ class YouTubeDownloadForm(FlaskForm):
         ('480', '480p'),
         ('360', '360p'),
     ], default='720')
-    submit = SubmitField('下载')
+    need_subtitle = RadioField(
+        '添加字幕',
+        choices=[('en', '英文'), ('cn', '中文'), ('', '不添加')],
+        default='en'
+    )
+    submit = SubmitField('下一步')

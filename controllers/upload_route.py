@@ -13,33 +13,39 @@ async def upload_controller(session):
         buvid3=session['buvid3']
     )
 
-    video_path = f"{session['save_dir']}/{session['save_video']}"
-    video_with_srt_path = f"{session['save_dir']}/with_srt_{session['save_video']}"
-    thumbnail_path = f"{session['save_dir']}/{session['save_cover']}"
-    subtitles_en_path = f"{session['save_dir']}/{session['save_srt_en']}"
-    subtitles_en_exist = os.path.exists(subtitles_en_path)
+    need_subtitle = session['need_subtitle']
+    video_path = (
+        f"{session['save_dir']}/with_srt_{session['save_video']}"
+        if need_subtitle
+        else f"{session['save_dir']}/{session['save_video']}"
+    )
 
     # TODO 字幕 https://github.com/Nemo2011/bilibili-api/issues/748
-    # ffmpeg -i static/video.mp4 -vf "subtitles=static/video.en.srt" -c:a copy static/video_with_srt.mp4
 
     # TODO 加结尾
 
     if form.validate_on_submit():
 
         title = form.title.data
-
-        # TODO 选择是否加字幕
-        if (subtitles_en_exist):
-            title = f"[英字] {title}"
-            print("加字幕...")
-            run_cli_command('ffmpeg', [
-                "-i", video_path,
-                "-vf",
-                f"subtitles={subtitles_en_path}",
-                "-c:a",
-                "copy",
-                video_with_srt_path
-            ])
+        subtitle_title_map = {
+            'en': '英字',
+            'cn': '中字'
+        }
+        title = f"[{subtitle_title_map.get(need_subtitle, '转')}] {title}"
+        if (need_subtitle):
+            srt = session[f"save_srt_{need_subtitle}"]
+            subtitles_path = f"{session['save_dir']}/{srt}"
+            subtitles_exist = os.path.exists(subtitles_path)
+            if (subtitles_exist):
+                print("加字幕...", title)
+                run_cli_command('ffmpeg', [
+                    "-i", video_path,
+                    "-vf",
+                    f"subtitles={subtitles_path}",
+                    "-c:a",
+                    "copy",
+                    video_path
+                ])
         title = truncate_str(cleaned_text(title), 75)
 
         args = {
@@ -56,10 +62,10 @@ async def upload_controller(session):
             title = title, 
             tags = form.tags.data.split(',') if len(form.tags.data) else ['youtube'], 
             desc = form.desc.data if form.desc.data else f"via. {clean_reship_url(session['video_url'])}", 
-            cover = form.cover.data if form.cover.data else thumbnail_path
+            cover = form.cover.data if form.cover.data else session['cover_path']
         )
         page = video_uploader.VideoUploaderPage(
-            path = video_with_srt_path if subtitles_en_exist else video_path,
+            path = video_path,
             title = title,
             description = form.desc.data
         )
