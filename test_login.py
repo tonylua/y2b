@@ -1,4 +1,4 @@
-from utils import AccountUtil
+from utils.account import AccountUtil
 
 def main():
     try:

@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class ExceptionEnum(Enum):
     COOKIE_CONFIG_ERR = 0
     INVALID_COOKIE_ERR = 1

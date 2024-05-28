@@ -22,7 +22,6 @@
         {% endwith %}
         <form method="POST">
             {{ form.csrf_token }}
-	    <!-- {{ form.hidden_tag() }} -->
             
             {% for field in form if field.name != 'csrf_token' %}
                 <div class="form-group{% if field.errors %} has-error{% endif %}">

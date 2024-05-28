@@ -1,5 +1,6 @@
 from bilibili_api import sync, video_uploader, channel_series, Credential
-from utils import AccountUtil, truncate_str
+from utils.account import AccountUtil
+from utils.string import truncate_str
 
 async def main():
     bili = AccountUtil(config_path="/root/move_video/bili_cookie.json")
