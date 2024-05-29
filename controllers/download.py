@@ -1,5 +1,6 @@
 
 from flask import Flask, redirect, url_for, render_template
+from utils.string import clean_reship_url
 from utils.account import AccountUtil, get_youtube_info
 from forms.download import YouTubeDownloadForm
 from utils.sys import run_cli_command, clear_video_directory
@@ -29,7 +30,7 @@ def download_controller(session):
     form = YouTubeDownloadForm(**args)
 
     if form.validate_on_submit():
-        video_url = form.video_url.data
+        video_url = clean_reship_url(form.video_url.data)
         resolution = form.resolution.data
 
         session['video_url'] = video_url
@@ -57,7 +58,6 @@ def download_controller(session):
             "-o", session['save_video'],
             video_url
         ]
-
         print("开始下载...", session['origin_title'], cli_args);
         run_cli_command('yt-dlp', cli_args)
 

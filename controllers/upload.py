@@ -1,7 +1,8 @@
 import os
+import subprocess
 from flask import Flask, redirect, url_for, render_template
 from bilibili_api import sync, video_uploader, Credential
-from utils.string import cleaned_text, clean_reship_url, truncate_str
+from utils.string import cleaned_text, truncate_str
 from utils.sys import run_cli_command, clear_video_directory
 from utils.constants import Route
 from forms.upload import BilibiliUploadForm
@@ -36,18 +37,22 @@ async def upload_controller(session):
             if (subtitles_exist):
                 video_path = f"{session['save_dir']}/with_srt_{session['save_video']}"
                 title = f"[{subtitle_title_map.get(need_subtitle, '转')}] {title}"
-                font_arg = ":force_style='FontName=AR PL UKai CN'" if need_subtitle == 'cn' else ""
-                # ffmpeg -i static/video.mp4 -vf "subtitles=xx.srt" -c:a copy static/video_with_srt.mp4
+                
                 ff_args = [
                     "-i", origin_video_path,
                     "-vf",
-                    f"subtitles={subtitles_path}{font_arg}",
+                    f"subtitles={subtitles_path}",
                     "-c:a",
                     "copy",
                     video_path
                 ]
+                if (need_subtitle == 'cn'):
+                    ff_args = ff_args[:3] + [f"subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"] + ff_args[4:]
                 print("加字幕...", title, subtitles_path, ff_args)
-                run_cli_command('ffmpeg', ff_args)
+                try:
+                    run_cli_command('ffmpeg', ff_args)
+                except subprocess.CalledProcessError as e:
+                    print(e.output.decode())
             else:
                 print("设置了字幕但没下载到...", title)
                 need_subtitle = False
@@ -67,7 +72,7 @@ async def upload_controller(session):
             no_reprint = True,
             title = title, 
             tags = form.tags.data.split(',') if len(form.tags.data) else ['youtube'], 
-            desc = form.desc.data if form.desc.data else f"via. {clean_reship_url(session['video_url'])}", 
+            desc = form.desc.data if form.desc.data else f"via. {session['video_url']}", 
             cover = form.cover.data if form.cover.data else session['cover_path']
         )
         page = video_uploader.VideoUploaderPage(
@@ -84,7 +89,7 @@ async def upload_controller(session):
         print("开始上传...");
         await uploader.start()
 
-        # clear_video_directory(session['save_dir'])
+        clear_video_directory(session['save_dir'])
 
         return redirect(url_for(Route.DOWNLOAD))
     

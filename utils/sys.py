@@ -47,7 +47,7 @@ def run_cli_command(command_name, args_list):
         if process.stderr is not None:
             process.stderr.close()
 
-# def run_cli_command(command_name, args_list, output_handler=None):
+# def run_cli_command2(command_name, args_list, output_handler=None):
 #     """
 #     执行命令行命令的通用函数。
     
