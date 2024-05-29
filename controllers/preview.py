@@ -1,6 +1,7 @@
 import os
 from flask import Flask, redirect, url_for, flash, render_template
 from utils.sys import get_file_size, find_cover_images
+from utils.constants import Route
 
 def preview_controller(session):
     video_path = f"{session['save_dir']}/{session['save_video']}"
@@ -10,12 +11,12 @@ def preview_controller(session):
     video_exists = os.path.exists(video_path)
     if not (video_exists):
         flash(f"视频未找到，请重新尝试。{video_path}", "warning")
-        return redirect(url_for('index'))
+        return redirect(url_for(Route.LOGIN))
     
     cover = find_cover_images(session['save_dir'])
     if not (cover):
         flash(f"封面未找到，请重新尝试。", "warning")
-        return redirect(url_for('index'))
+        return redirect(url_for(Route.LOGIN))
     else:
         session['cover_path'] = cover
 
@@ -33,7 +34,7 @@ def preview_controller(session):
         subtitle_cn_name = session['save_srt_cn']
     
     return render_template('preview.html', 
-        video_path=url_for('static', filename='video/'+session['save_video']), 
+        video_path=url_for('static', filename=f"{session['save_dir_rel']}/{session['save_video']}"), 
         thumbnail_path=cover,
         subtitle_en_name=subtitle_en_name,
         subtitle_cn_name=subtitle_cn_name)

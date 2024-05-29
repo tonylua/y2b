@@ -2,9 +2,27 @@ import re
 import requests
 import json
 from json import JSONDecodeError
+from typing import List, Dict, Any
 from yt_dlp import YoutubeDL
 from .string import cleaned_text
 from ._exception import CookieException, ExceptionEnum
+
+def load_app_accounts() -> List[Dict[str, Any]]:
+    """
+    加载并解析应用账户信息。
+    
+    从指定的JSON文件中读取用户账户数据，该文件应包含一个名为'users'的键，
+    其值为一个字典列表，每个字典代表一个用户，包含'username'和'password'键。
+    
+    :return: 一个字典列表，即 'users' 字段，每个字典包含用户信息。例如：
+             [
+                 {'username': 'user1', 'password': 'hashed_password1'},
+                 {'username': 'user2', 'password': 'hashed_password2'}
+             ]
+    """
+    with open('/root/move_video/app_accounts.json', 'r') as file:
+        accounts_data = json.load(file)
+    return accounts_data['users']
 
 def get_youtube_info(video_url):
     """

@@ -4,9 +4,10 @@ from utils.account import AccountUtil, get_youtube_info
 from forms.download import YouTubeDownloadForm
 from utils.sys import run_cli_command, clear_video_directory
 
-def index_controller(session):
-    session['save_dir_rel'] = 'static/video'
-    session['save_dir'] = f"/root/move_video/{session['save_dir_rel']}"
+def download_controller(session):
+    user = session['login_name']
+    session['save_dir_rel'] = f"video/{user}"
+    session['save_dir'] = f"/root/move_video/static/{session['save_dir_rel']}"
     session['save_video'] = 'video.mp4'
     session['save_srt_en'] = 'video.en.srt'
     session['save_srt_cn'] = 'video.zh-Hans.srt'
@@ -16,7 +17,7 @@ def index_controller(session):
         bili_cookies = bili.verify_cookie()
         # for key, value in bili_cookies.items():
         #     session[key] = value
-        print("登录信息有效：%s" % bili_cookies['user_name'])
+        print("bilibili 登录信息有效：%s" % bili_cookies['user_name'])
     except Exception as e:
         raise(e)
 
@@ -40,7 +41,6 @@ def index_controller(session):
 
         # TODO threading 进度条
 
-        # TODO 如果支持并行操作
         clear_video_directory(session['save_dir'])
 
         print("获取视频标题...")

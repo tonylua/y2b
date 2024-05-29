@@ -1,9 +1,11 @@
 import secrets
 import os
-from flask import Flask, session
-from controllers.index_route import index_controller
-from controllers.preview_route import preview_controller
-from controllers.upload_route import upload_controller
+from functools import wraps
+from flask import Flask, session, request, flash, redirect, url_for  
+from controllers.login import login_controller
+from controllers.download import download_controller
+from controllers.preview import preview_controller
+from controllers.upload import upload_controller
 
 app = Flask(__name__, template_folder='/root/move_video/templates')
 app.config['SECRET_KEY'] = secrets.token_urlsafe(32) 
@@ -13,15 +15,31 @@ app.config['SESSION_TYPE'] = 'filesystem'
 def setup_session():
     session.permanent = True 
 
+def login_required(view):
+    @wraps(view)
+    def wrapped_view(**kwargs):
+        if 'login_name' not in session:
+            flash('请先登录', 'danger') 
+            return redirect(url_for('login'))
+        print(session['login_name'], '已登录', request.headers.get('User-Agent'))
+        return view(**kwargs)
+    return wrapped_view
+
 @app.route('/', methods=['GET', 'POST'])
-def index():
-    return index_controller(session)
+def login():
+    return login_controller(session)
+
+@app.route('/download', methods=['GET', 'POST'])
+@login_required
+def download():
+    return download_controller(session)
 
 @app.route('/preview', methods=['GET', 'POST'])
+@login_required
 def preview():
     return preview_controller(session)
 
-@app.route('/upload', methods=['GET', 'POST'])  
+@app.route('/upload', methods=['GET', 'POST']) 
 async def upload():
     return await upload_controller(session)
 

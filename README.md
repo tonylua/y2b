@@ -1,5 +1,7 @@
 pip3 install bilibili-api-python
 
+sudo apt-get install fonts-arphic-ukai fonts-arphic-uming
+
 vim /usr/local/lib/python3.11/dist-packages/bilibili_api/video_uploader.py
 # 修改这行
 "porder": self.porder.__dict__() if self.porder else None,

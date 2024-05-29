@@ -2,7 +2,8 @@ import os
 from flask import Flask, redirect, url_for, render_template
 from bilibili_api import sync, video_uploader, Credential
 from utils.string import cleaned_text, clean_reship_url, truncate_str
-from utils.sys import run_cli_command
+from utils.sys import run_cli_command, clear_video_directory
+from utils.constants import Route
 from forms.upload import BilibiliUploadForm
 
 async def upload_controller(session):
@@ -14,39 +15,44 @@ async def upload_controller(session):
     )
 
     need_subtitle = session['need_subtitle']
-    video_path = (
-        f"{session['save_dir']}/with_srt_{session['save_video']}"
-        if need_subtitle
-        else f"{session['save_dir']}/{session['save_video']}"
-    )
-
-    # TODO 字幕 https://github.com/Nemo2011/bilibili-api/issues/748
+    origin_video_path = f"{session['save_dir']}/{session['save_video']}"
+    video_path = origin_video_path
 
     # TODO 加结尾
 
     if form.validate_on_submit():
 
         title = form.title.data
+
+        # TODO srt字幕直接上传 https://github.com/Nemo2011/bilibili-api/issues/748
         subtitle_title_map = {
             'en': '英字',
             'cn': '中字'
         }
-        title = f"[{subtitle_title_map.get(need_subtitle, '转')}] {title}"
         if (need_subtitle):
             srt = session[f"save_srt_{need_subtitle}"]
             subtitles_path = f"{session['save_dir']}/{srt}"
             subtitles_exist = os.path.exists(subtitles_path)
             if (subtitles_exist):
-                print("加字幕...", title)
-                run_cli_command('ffmpeg', [
-                    "-i", video_path,
+                video_path = f"{session['save_dir']}/with_srt_{session['save_video']}"
+                title = f"[{subtitle_title_map.get(need_subtitle, '转')}] {title}"
+                font_arg = ":force_style='FontName=AR PL UKai CN'" if need_subtitle == 'cn' else ""
+                # ffmpeg -i static/video.mp4 -vf "subtitles=xx.srt" -c:a copy static/video_with_srt.mp4
+                ff_args = [
+                    "-i", origin_video_path,
                     "-vf",
-                    f"subtitles={subtitles_path}",
+                    f"subtitles={subtitles_path}{font_arg}",
                     "-c:a",
                     "copy",
                     video_path
-                ])
-        title = truncate_str(cleaned_text(title), 75)
+                ]
+                print("加字幕...", title, subtitles_path, ff_args)
+                run_cli_command('ffmpeg', ff_args)
+            else:
+                print("设置了字幕但没下载到...", title)
+                need_subtitle = False
+                title = f"[转] {title}"
+        title = truncate_str(cleaned_text(title), 77)
 
         args = {
             "sessdata": form.sessdata.data,
@@ -78,6 +84,8 @@ async def upload_controller(session):
         print("开始上传...");
         await uploader.start()
 
-        return redirect(url_for('index'))
+        # clear_video_directory(session['save_dir'])
+
+        return redirect(url_for(Route.DOWNLOAD))
     
     return render_template('upload.html', form=form)
