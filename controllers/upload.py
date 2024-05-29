@@ -52,7 +52,7 @@ async def upload_controller(session):
                 try:
                     run_cli_command('ffmpeg', ff_args)
                 except subprocess.CalledProcessError as e:
-                    print(e.output.decode())
+                    print('ffmpeg 加字幕过程报错', e)
             else:
                 print("设置了字幕但没下载到...", title)
                 need_subtitle = False
