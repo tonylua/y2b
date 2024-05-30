@@ -93,6 +93,10 @@ async def upload_controller(session):
         except bilibili_api.exceptions.NetworkException as e:
             flash("bilibili_api 403，请尝试更新cookie信息", "warning")
             return redirect(url_for(Route.LOGIN))
+        except bilibili_api.exceptions.ResponseCodeException as e:
+            print(e)
+            flash("需要输入验证码了，请稍后再投稿", "warning")
+            return redirect(url_for(Route.LOGIN))
 
         # clear_video_directory(session['save_dir'])
 

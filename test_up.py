@@ -36,11 +36,11 @@ async def main():
         title = title, 
         tags = ['youtube'], 
         desc = 'via. youtube', 
-        cover = 'static/video/user2/video.webp',
+        cover = 'static/video/test.jpg',
         no_reprint = True
     )
     page = video_uploader.VideoUploaderPage(
-        path = 'static/video/user2/with_srt_video.mp4',
+        path = 'static/video/test.mp4',
         title = title,
         description='', 
     )
@@ -53,6 +53,8 @@ async def main():
     try:
         await uploader.start()
     except bilibili_api.exceptions.NetworkException as e:
-        print("bilibili_api 403，请尝试更新cookie信息", "warning")
+        print("bilibili_api 403，请尝试更新cookie信息")
+    except bilibili_api.exceptions.ResponseCodeException as e:
+        print("需要输入验证码了\r\n", e)
 
 sync(main())
