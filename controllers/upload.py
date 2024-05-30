@@ -1,6 +1,7 @@
 import os
 import subprocess
-from flask import Flask, redirect, url_for, render_template
+from flask import Flask, redirect, url_for, render_template, flash
+import bilibili_api
 from bilibili_api import sync, video_uploader, Credential
 from utils.string import cleaned_text, truncate_str
 from utils.sys import run_cli_command, clear_video_directory
@@ -87,9 +88,13 @@ async def upload_controller(session):
             print(data)
 
         print("开始上传...");
-        await uploader.start()
+        try:
+            await uploader.start()
+        except bilibili_api.exceptions.NetworkException as e:
+            flash("bilibili_api 403，请尝试更新cookie信息", "warning")
+            return redirect(url_for(Route.LOGIN))
 
-        clear_video_directory(session['save_dir'])
+        # clear_video_directory(session['save_dir'])
 
         return redirect(url_for(Route.DOWNLOAD))
     
