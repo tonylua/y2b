@@ -48,11 +48,11 @@ async def upload_controller(session):
                     video_path
                 ]
                 if (need_subtitle == 'cn'):
-                    ff_args = ff_args[:3] + [f"subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"] + ff_args[4:]
+                    ff_args = ff_args[:3] + [f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"] + ff_args[4:]
                 print("加字幕...", title, subtitles_path, ff_args)
                 try:
                     run_cli_command('ffmpeg', ff_args)
-                except subprocess.CalledProcessError as e:
+                except (Exception, subprocess.CalledProcessError) as e:
                     print('ffmpeg 加字幕过程报错', e)
             else:
                 print("设置了字幕但没下载到...", title)
