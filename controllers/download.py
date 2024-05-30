@@ -68,33 +68,30 @@ def download_controller(session):
         
     return render_template('download.html', form=form)
 
-
-
 task_status = {}
 
 def create_progress_hook(task_id):
+    # https://github.com/yt-dlp/yt-dlp/blob/2e5a47da400b645aadbda6afd1156bd89c744f48/yt_dlp/YoutubeDL.py#L363
+    # https://github.com/yt-dlp/yt-dlp/blob/2e5a47da400b645aadbda6afd1156bd89c744f48/yt_dlp/downloader/common.py#L362
     def hook(d):
-        print(d['status'], '_percent_str' in d, "+++++++")
         if d['status'] == 'finished':
             task_status[task_id]['status'] = 'completed'
-            task_status[task_id]['progress'] = 1
+            task_status[task_id]['progress'] = '100%'
         elif d['status'] == 'downloading':
             task_status[task_id]['status'] = 'running'
             task_status[task_id]['progress'] = d['_percent_str']
+        elif d['status'] == 'error':
+            task_status[task_id]['status'] = 'error'
+            task_status[task_id]['progress'] = 'ERR'
     return hook
 
 def run_yt_dlp(url, ydl_opts, task_id):
     with YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(url, download=False)
-        title = info_dict.get('title', None)
-        file_size = info_dict.get('filesize_approx', 0)
-        task_status[task_id] = {'status': 'running', 'progress': '0%', 'total': file_size}
-        print("开始下载...", title)
+        print("开始下载...")
         ydl.download([url])
     task_status[task_id]['status'] = 'completed'
 
 def download_status_ajax(task_id):
-    # print('@@@', task_id, task_status, task_id in task_status)
     if task_id in task_status:
         return jsonify(task_status[task_id])
     else:
@@ -114,15 +111,18 @@ def download_video_ajax(session):
 
     clear_video_directory(session['save_dir'])
 
-    print(user, "获取视频标题...")
-    session['origin_title'] = get_youtube_info(video_url)["title"]
+    print(user, "获取视频标题等...")
+    info = get_youtube_info(video_url)
+    session['origin_title'] = info["title"]
+    session['origin_file_size'] = info["file_size"]
 
     task_id = str(uuid.uuid4())
     print('init task_id', task_id)
-    task_status[task_id] = {'status': 'running', 'progress': '0%'}
+    task_status[task_id] = {'status': 'running', 'progress': '', 'total': session['origin_file_size']}
+
     progress_hook = create_progress_hook(task_id)
 
-    ydl_opts = {
+    opts = {
         'writesubtitles': need_subtitle, 
         'subtitleslangs': [need_subtitle], 
         'writesubtitlesformat': 'srt' if need_subtitle else None, 
@@ -132,6 +132,6 @@ def download_video_ajax(session):
         'progress_hooks': [progress_hook],
     }
 
-    thread = Thread(target=run_yt_dlp, args=(video_url, ydl_opts, task_id))
+    thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id))
     thread.start()
     return jsonify({'task_id': task_id}), 202

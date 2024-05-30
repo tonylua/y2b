@@ -59,7 +59,7 @@ $(document).ready(function(){
         $.get("/download_status/" + taskId, function(data){
             if(data.status === 'running') {
                 updateProgressUI(data.progress); 
-                setTimeout(function() { checkTaskStatus(taskId); }, 3000); 
+                setTimeout(function() { checkTaskStatus(taskId); }, 1000); 
             } else if(data.status === 'completed') {
                 $("#loading-indicator").hide();
                 document.location.href = '/preview';

@@ -36,10 +36,12 @@ def get_youtube_info(video_url):
         url = info_dict.get("url", None)
         video_id = info_dict.get("id", None)
         title = info_dict.get('title', None)
+        file_size = info_dict.get('filesize_approx', 0)
         return {
             "url": url, 
             "id": video_id, 
-            "title": cleaned_text(title)
+            "title": cleaned_text(title),
+            "file_size": file_size
         }
 
 # https://github.com/SP-FA/autoBilibili
