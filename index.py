@@ -3,7 +3,7 @@ import os
 from functools import wraps
 from flask import Flask, session, request, flash, redirect, url_for  
 from controllers.login import login_controller
-from controllers.download import download_controller
+from controllers.download import download_controller, download_video_ajax, download_status_ajax
 from controllers.preview import preview_controller
 from controllers.upload import upload_controller
 
@@ -33,6 +33,14 @@ def login():
 @login_required
 def download():
     return download_controller(session)
+
+@app.route('/download_video', methods=['POST'])
+def download_ajax():
+    return download_video_ajax(session)
+
+@app.route('/download_status/<task_id>', methods=['GET'])
+def download_status(task_id):
+    return download_status_ajax(task_id)
 
 @app.route('/preview', methods=['GET', 'POST'])
 @login_required

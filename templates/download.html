@@ -9,7 +9,13 @@
         {% for field in form if field.name != 'csrf_token' %}
             <div class="form-group row {% if field.errors %} has-error{% endif %}">
                 {% if field.type == 'SubmitField' %}
-                    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+                    <!-- <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button> -->
+                    <button id="submit-form" type="button" class="btn btn-primary" disabled>{{ form.submit.label.text }}</button>
+                    <button id="loading-indicator" class="btn btn-primary" type="button" disabled  style="display: none">
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                        <span class="visually-hidden" role="status">{{ form.submit.label.text }}</span>
+                        <span class="progress-num"></span>
+                    </button>
                 {% else %}
                     <label class="col-sm-2 col-form-label">
                         {{ field.label(class="form-control-label") }}: 
@@ -38,4 +44,49 @@
         {% endfor %}
     </form>
 </div>
+{% endblock %}
+
+{% block footer %}
+<script>
+$(document).ready(function(){
+    $("#submit-form").prop('disabled', false);
+
+    function updateProgressUI(progress) {
+        $("#loading-indicator .progress-num").text(progress);
+    }
+
+    function checkTaskStatus(taskId) {
+        $.get("/download_status/" + taskId, function(data){
+            if(data.status === 'running') {
+                updateProgressUI(data.progress); 
+                setTimeout(function() { checkTaskStatus(taskId); }, 3000); 
+            } else if(data.status === 'completed') {
+                $("#loading-indicator").hide();
+                document.location.href = '/preview';
+            } else {
+                $("#submit-form").show();
+                $("#loading-indicator").hide();
+                alert([taskId, "Task not found or error occurred."]);
+            }
+        }).catch(() => {
+            $("#submit-form").show();
+            $("#loading-indicator").hide();
+            alert('/download_status Error');
+        });;
+    }
+
+    $("#submit-form").click(function(){
+        $("#submit-form").hide();
+        $("#loading-indicator").show();
+        $.post("/download_video", 
+            $(document.forms[0]).serialize(), 
+            (data) => checkTaskStatus(data.task_id))
+            .catch(() => {
+                $("#submit-form").show();
+                $("#loading-indicator").hide();
+                alert('/download_video Error');
+            });
+    });
+});
+</script>
 {% endblock %}
