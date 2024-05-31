@@ -100,11 +100,11 @@ def download_status_ajax(task_id):
 def download_video_ajax(session):
     clear_video_directory(session['save_dir'])
 
-    print("获取视频标题等...")
-    info = get_youtube_info(video_url)
     resolution = request.form.get('resolution')
     need_subtitle = request.form.get('need_subtitle')
     video_url = clean_reship_url(request.form.get('video_url'))
+    print("获取视频标题等...")
+    info = get_youtube_info(video_url)
 
     session['origin_title'] = info["title"]
     session['origin_file_size'] = info["file_size"]
