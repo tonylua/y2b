@@ -99,27 +99,26 @@ def download_status_ajax(task_id):
 
 def download_video_ajax(session):
     user = session['login_name']
-    video_url = clean_reship_url(request.form.get('video_url'))
+    clear_video_directory(session['save_dir'])
+
+    print(user, "获取视频标题等...")
+    info = get_youtube_info(video_url)
     resolution = request.form.get('resolution')
+    need_subtitle = request.form.get('need_subtitle')
+    video_url = clean_reship_url(request.form.get('video_url'))
+
+    session['origin_title'] = info["title"]
+    session['origin_file_size'] = info["file_size"]
     session['video_url'] = video_url
     session['resolution'] = resolution
     session['SESSDATA'] = request.form.get('sessdata')
     session['bili_jct'] = request.form.get('bili_jct')
     session['buvid3'] = request.form.get('buvid3')
-    need_subtitle = request.form.get('need_subtitle')
     session['need_subtitle'] = need_subtitle
 
-    clear_video_directory(session['save_dir'])
-
-    print(user, "获取视频标题等...")
-    info = get_youtube_info(video_url)
-    session['origin_title'] = info["title"]
-    session['origin_file_size'] = info["file_size"]
-
     task_id = str(uuid.uuid4())
-    print('init task_id', task_id)
+    # print('init task_id', task_id)
     task_status[task_id] = {'status': 'running', 'progress': '', 'total': session['origin_file_size']}
-
     progress_hook = create_progress_hook(task_id)
 
     opts = {
@@ -128,10 +127,10 @@ def download_video_ajax(session):
         'writesubtitlesformat': 'srt' if need_subtitle else None, 
         'writethumbnail': True,  
         'outtmpl': os.path.join(session['save_dir'], session['save_video']), 
-        'format': 'bv*[height<={resolution}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]'.format(resolution=resolution), 
+        'format': f"bv*[height<={resolution}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
         'progress_hooks': [progress_hook],
     }
-
     thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id))
     thread.start()
+    
     return jsonify({'task_id': task_id}), 202
