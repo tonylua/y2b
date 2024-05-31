@@ -98,10 +98,9 @@ def download_status_ajax(task_id):
         return jsonify({'status': 'not_found'}), 404
 
 def download_video_ajax(session):
-    user = session['login_name']
     clear_video_directory(session['save_dir'])
 
-    print(user, "获取视频标题等...")
+    print("获取视频标题等...")
     info = get_youtube_info(video_url)
     resolution = request.form.get('resolution')
     need_subtitle = request.form.get('need_subtitle')
@@ -132,5 +131,5 @@ def download_video_ajax(session):
     }
     thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id))
     thread.start()
-    
+
     return jsonify({'task_id': task_id}), 202
