@@ -75,7 +75,7 @@ def create_progress_hook(task_id):
     # https://github.com/yt-dlp/yt-dlp/blob/2e5a47da400b645aadbda6afd1156bd89c744f48/yt_dlp/downloader/common.py#L362
     def hook(d):
         if d['status'] == 'finished':
-            task_status[task_id]['status'] = 'completed'
+            task_status[task_id]['status'] = 'running'
             task_status[task_id]['progress'] = '100%'
         elif d['status'] == 'downloading':
             task_status[task_id]['status'] = 'running'
@@ -90,6 +90,7 @@ def run_yt_dlp(url, ydl_opts, task_id):
         print("开始下载...")
         ydl.download([url])
     task_status[task_id]['status'] = 'completed'
+    task_status[task_id]['progress'] = '100%'
 
 def download_status_ajax(task_id):
     if task_id in task_status:
@@ -100,14 +101,21 @@ def download_status_ajax(task_id):
 def download_video_ajax(session):
     clear_video_directory(session['save_dir'])
 
-    resolution = request.form.get('resolution')
+    subtitle_map = {
+        'en': "en",
+        'cn': "zh-Hans",
+    }
     need_subtitle = request.form.get('need_subtitle')
+
+    resolution = request.form.get('resolution')
     video_url = clean_reship_url(request.form.get('video_url'))
+
     print("获取视频标题等...")
     info = get_youtube_info(video_url)
-
     session['origin_title'] = info["title"]
+    session['origin_id'] = info["id"]
     session['origin_file_size'] = info["file_size"]
+
     session['video_url'] = video_url
     session['resolution'] = resolution
     session['SESSDATA'] = request.form.get('sessdata')
@@ -116,19 +124,19 @@ def download_video_ajax(session):
     session['need_subtitle'] = need_subtitle
 
     task_id = str(uuid.uuid4())
-    # print('init task_id', task_id)
-    task_status[task_id] = {'status': 'running', 'progress': '', 'total': session['origin_file_size']}
+    task_status[task_id] = {'status': 'running', 'progress': '', 'title': session['origin_title']}
     progress_hook = create_progress_hook(task_id)
 
     opts = {
-        'writesubtitles': need_subtitle, 
-        'subtitleslangs': [need_subtitle], 
+        'writesubtitles': bool(need_subtitle), 
+        'subtitleslangs': [subtitle_map.get(need_subtitle, '')], 
         'writesubtitlesformat': 'srt' if need_subtitle else None, 
-        'writethumbnail': True,  
+        'writethumbnail': True,     
         'outtmpl': os.path.join(session['save_dir'], session['save_video']), 
         'format': f"bv*[height<={resolution}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
         'progress_hooks': [progress_hook],
     }
+    print('准备下载', task_id, '\n', opts)
     thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id))
     thread.start()
 

@@ -13,7 +13,7 @@
                     <button id="submit-form" type="button" class="btn btn-primary" disabled>{{ form.submit.label.text }}</button>
                     <button id="loading-indicator" class="btn btn-primary" type="button" disabled  style="display: none">
                         <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-                        <span class="visually-hidden" role="status">{{ form.submit.label.text }}</span>
+                        <span class="visually-hidden" role="status">下载中...</span>
                         <span class="progress-num"></span>
                     </button>
                 {% else %}
@@ -51,15 +51,13 @@
 $(document).ready(function(){
     $("#submit-form").prop('disabled', false);
 
-    function updateProgressUI(progress) {
-        $("#loading-indicator .progress-num").text(progress);
-    }
-
     function checkTaskStatus(taskId) {
-        $.get("/download_status/" + taskId, function(data){
+        $.get(`/download_status/${taskId}`, function(data) {
             if(data.status === 'running') {
-                updateProgressUI(data.progress); 
-                setTimeout(function() { checkTaskStatus(taskId); }, 1000); 
+                $("#loading-indicator .progress-num").text(
+                    `${data.title.substr(0, 15)} ${data.progress}`
+                );
+                setTimeout(() => checkTaskStatus(taskId), 1000); 
             } else if(data.status === 'completed') {
                 $("#loading-indicator").hide();
                 document.location.href = '/preview';
@@ -72,7 +70,7 @@ $(document).ready(function(){
             $("#submit-form").show();
             $("#loading-indicator").hide();
             alert('/download_status Error');
-        });;
+        });
     }
 
     $("#submit-form").click(function(){
@@ -80,12 +78,12 @@ $(document).ready(function(){
         $("#loading-indicator").show();
         $.post("/download_video", 
             $(document.forms[0]).serialize(), 
-            (data) => checkTaskStatus(data.task_id))
-            .catch(() => {
-                $("#submit-form").show();
-                $("#loading-indicator").hide();
-                alert('/download_video Error');
-            });
+            (data) => checkTaskStatus(data.task_id)
+        ).catch(() => {
+            $("#submit-form").show();
+            $("#loading-indicator").hide();
+            alert('/download_video Error');
+        });
     });
 });
 </script>

@@ -3,6 +3,8 @@ import subprocess
 from flask import Flask, redirect, url_for, render_template, flash
 import bilibili_api
 from bilibili_api import sync, video_uploader, Credential
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.formatters import SRTFormatter
 from utils.string import cleaned_text, truncate_str
 from utils.sys import run_cli_command, clear_video_directory
 from utils.constants import Route
@@ -35,6 +37,23 @@ async def upload_controller(session):
             srt = session[f"save_srt_{need_subtitle}"]
             subtitles_path = f"{session['save_dir']}/{srt}"
             subtitles_exist = os.path.exists(subtitles_path)
+
+            if not subtitles_exist:
+                video_id = session['origin_id']
+                try:
+                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                    transcript = transcript_list.find_transcript(['en'])
+                    if need_subtitle == 'cn':
+                        transcript = transcript.translate('zh-Hans')
+                    formatter = SRTFormatter()
+                    srt_formatted = formatter.format_transcript(transcript.fetch())
+                    with open(subtitles_path, 'w', encoding='utf-8') as srt_file:
+                        srt_file.write(srt_formatted)
+                    print(f"补充了字幕 {subtitles_path}")
+                    subtitles_exist = os.path.exists(subtitles_path)
+                except Exception as e:
+                    print(e)
+
             if (subtitles_exist):
                 video_path = f"{session['save_dir']}/with_srt_{session['save_video']}"
                 title = f"[{subtitle_title_map.get(need_subtitle, '转')}] {title}"
