@@ -30,33 +30,32 @@ class VideoDB(BaseORM):
         super().__init__(db_name)
         self.table_name = 'videos'
 
-    # TODO user?
-    def create_video(self, id, title, save_path, origin_url, size=None):
+    def create_video(self, user, origin_id, title, save_path, origin_url):
         """插入一条新的视频记录"""
         with self.transaction():
             query = f"""
-            INSERT INTO {self.table_name} (id, title, save_path, origin_url, size)
+            INSERT INTO {self.table_name} (user, origin_id, title, save_path, origin_url)
             VALUES (?, ?, ?, ?, ?);
             """
-            self.cursor.execute(query, (id, title, save_path, origin_url, size or 0))
+            self.cursor.execute(query, (user, origin_id, title, save_path, origin_url))
             return self.cursor.lastrowid
 
-    def read_video(self, video_id):
+    def read_video(self, id):
         """根据ID读取视频记录"""
         with self.transaction():
-            query = f"SELECT * FROM {self.table_name} WHERE id = ?;"
-            self.cursor.execute(query, (video_id,))
+            query = f"SELECT * FROM {self.table_name} WHERE id = ? ;"
+            self.cursor.execute(query, (id,))
             return self.cursor.fetchone()
     
-    def list_videos(self):
+    def list_videos(self, user):
         """列出所有视频记录"""
         with self.transaction():
-            query = f"SELECT * FROM {self.table_name};"
+            query = f"SELECT * FROM {self.table_name} WHERE user = {user};"
             self.cursor.execute(query)
             # return self.cursor.fetchall()
             return [dict(row) for row in self.cursor.fetchall()]  # 转换为字典列表
 
-    def update_video(self, video_id, **kwargs):
+    def update_video(self, id, **kwargs):
         """根据ID更新视频记录"""
         set_clause = ', '.join([f"{key} = ?" for key in kwargs])
         with self.transaction():
@@ -65,11 +64,11 @@ class VideoDB(BaseORM):
             SET {set_clause}
             WHERE id = ?;
             """
-            values = list(kwargs.values()) + [video_id]
+            values = list(kwargs.values()) + [id]
             self.cursor.execute(query, values)
 
-    def delete_video(self, video_id):
+    def delete_video(self, id):
         """根据ID删除视频记录"""
         with self.transaction():
             query = f"DELETE FROM {self.table_name} WHERE id = ?;"
-            self.cursor.execute(query, (video_id,))
+            self.cursor.execute(query, (id,))

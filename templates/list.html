@@ -4,21 +4,28 @@
 
 {% block content %}
 <table class="table table-striped">
+    <caption>{{ session['login_name'] }}'s videos</caption>
     <thead>
         <tr>
-            <th scope="col">File Name</th>
-            <th scope="col">Video Title</th>
+            <th scope="col">Title</th>
+            <th scope="col">ID</th>
             <th scope="col">Time</th>
-            <th scope="col">Finished</th>
+            <th scope="col">Status</th>
+            <th scope="col">Operations</th>
         </tr>
     </thead>
     <tbody>
         {% for video in videos %}
             <tr>
-                <td><a href="#">{{ video.save_path }}</a></td>
-                <td>{{ video.title }}</td>
+                <td><a href="{{ video.save_path }}">{{ video.title }}</a></td>
+                <td>{{ video.origin_id }}</td>
                 <td>{{ video.created }}</td>
-                <td>{{ video.uploaded }}</td>
+                <td>{{ video.status }}</td>
+                <td>
+                    {% if video.status == 'downloaded' %}
+                    <button class="btn btn-primary">upload</button>
+                    {% endif %}
+                </td>
             </tr>
         {% endfor %}
     </tbody>

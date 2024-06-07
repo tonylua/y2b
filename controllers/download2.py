@@ -21,7 +21,7 @@ task_status = {}
 def get_path(key):
     return f"{g.session['save_dir']}/{key}"
 
-async def do_upload(task_id):
+async def do_upload(task_id, db_vid):
     task = task_status[task_id]
     title = task['title']
     video_id = g.session['origin_id']
@@ -83,13 +83,15 @@ async def do_upload(task_id):
     db_update_args = {
         "title": title,
         "cover": cover,
-        "save_srt": subtitles_path if need_subtitle else None,
-        "uploaded": False
+        "save_srt": subtitles_path if need_subtitle else None
     }
 
     if not session['auto_upload']:
         # rename_completed_file(origin_video_path, '.unuploaded')
-        db.update_video(video_id, **db_update_args)
+        db_update_args += {
+            "status": "downloaded" # 只有非自动上传时才让列表页识别已下载状态
+        }
+        db.update_video(db_vid, **db_update_args)
         return redirect(url_for(Route.LIST))
 
     args = {
@@ -121,11 +123,12 @@ async def do_upload(task_id):
     async def ev(data):
         print('上传完成', data)
         db_update_args += pick(vu_data, ["desc", "tid", "tags"])
-        db_update_args["uploaded"] = True
-        db.update_video(video_id, **db_update_args)
+        db_update_args["status"] = "uploaded"
+        db.update_video(db_vid, **db_update_args)
 
     print("开始上传...");
     try:
+        db.update_video(db_vid, status='uploading')
         await uploader.start()
     except bilibili_api.exceptions.NetworkException as e:
         flash("bilibili_api 403，请尝试更新cookie信息", "warning")
@@ -148,13 +151,13 @@ def create_progress_hook(task_id):
             task_status[task_id]['progress'] = 'ERR'
     return hook
 
-def run_yt_dlp(url, ydl_opts, task_id):
+def run_yt_dlp(url, ydl_opts, task_id, db_vid):
     with YoutubeDL(ydl_opts) as ydl:
         print("开始下载...")
         ydl.download([url])
     task_status[task_id]['status'] = 'completed'
     # rename_completed_file(task_status[task_id]['path'])
-    do_upload(task_id)
+    do_upload(task_id, db_vid)
 
 def download_controller(session):
     user = session['login_name']
@@ -224,17 +227,17 @@ def download_controller(session):
         }
 
         db = VideoDB()
-        db.create_video(
-            id = video_id,
-            # user = user,
-            title = info["title"], 
-            save_path = save_path, 
+        db_vid = db.create_video(
+            user = user,
+            origin_id = video_id,
             origin_url = video_url, 
-            size = info["file_size"]
+            save_path = save_path, 
+            title = info["title"]
         )
 
         print('准备下载', task_id, '\n', opts)
-        thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id))
+        db.update_video(db_vid, status='downloading')
+        thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id, db_vid))
         thread.start()
 
         return redirect(url_for(Route.LIST))
