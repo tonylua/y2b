@@ -7,3 +7,7 @@ vim /usr/local/lib/python3.11/dist-packages/bilibili_api/video_uploader.py
 "porder": self.porder.__dict__() if self.porder else None,
 # 56x行meta中增加：
 "source": self.source,
+
+sudo apt-get install sqlite3
+sqlite3 db/database.db
+SELECT * FROM videos;

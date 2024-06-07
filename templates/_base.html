@@ -12,6 +12,13 @@
     {% for message in get_flashed_messages() %}
         <p>{{ message }}</p>
     {% endfor %}
+    <nav class="mb-2">
+        {% if need_add_button %}
+        <button type="button" class="btn btn-primary" onclick="location.href='{{ url_for('download') }}'">
+            Add
+        </button>
+        {% endif %}
+    </nav>
     {% block content %}{% endblock %}
 </div>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>

@@ -1,0 +1,26 @@
+{% extends "_base.html" %}
+
+{% block title %} List {% endblock %}
+
+{% block content %}
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th scope="col">File Name</th>
+            <th scope="col">Video Title</th>
+            <th scope="col">Time</th>
+            <th scope="col">Finished</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for video in videos %}
+            <tr>
+                <td><a href="#">{{ video.save_path }}</a></td>
+                <td>{{ video.title }}</td>
+                <td>{{ video.created }}</td>
+                <td>{{ video.uploaded }}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

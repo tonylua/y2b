@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_wtf import FlaskForm
-from wtforms import RadioField, StringField, SelectField, SubmitField
+from wtforms import RadioField, StringField, IntegerField, SelectField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired, URL
 
 class YouTubeDownloadForm(FlaskForm):
@@ -19,4 +19,12 @@ class YouTubeDownloadForm(FlaskForm):
         choices=[('en', '英文'), ('cn', '中文'), ('', '不添加')],
         default='en'
     )
+    auto_upload = RadioField(
+        '自动上传',
+        choices=[(1, '是'), (0, '否')],
+        default=1
+    )
+    tid = IntegerField('Tid', default=231, validators=[DataRequired()])
+    tags = StringField('Tags', default='Youtube')
+    desc = TextAreaField('Description')
     submit = SubmitField('下一步')

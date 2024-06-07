@@ -1,9 +1,23 @@
 import os
 import re
-import shutil
-import subprocess
 import re
 import glob
+import shutil
+import subprocess
+from typing import List, Dict, Union,   Tuple, Callable
+
+def rename_completed_file(file_path, replaced_str = ''):
+    if '.tmp' in file_path:
+        base_name, ext_with_tmp = file_path.rsplit('.tmp', 1)
+        # 去掉或替换 .tmp 部分
+        new_file_path = f"{base_name}{replaced_str}{ext_with_tmp}"
+        try:
+            os.rename(file_path, new_file_path)
+            print(f"文件已成功重命名为: {new_file_path}")
+        except OSError as e:
+            print(f"重命名文件时发生错误: {e}")
+    else:
+        print("提供的文件名中没有找到 '.tmp' 标识符")
 
 def find_cover_images(directory):
     """
@@ -87,7 +101,7 @@ def clear_video_directory(path):
         shutil.rmtree(path)
         os.makedirs(path)
 
-def get_file_size(file_path):
+def get_file_size(file_path: str) -> int:
     """
     获取文件大小，并以易于阅读的单位（B, KB, MB, GB）返回。
     
@@ -101,6 +115,25 @@ def get_file_size(file_path):
         size /= 1024.0
     return f"{size:.2f} {unit}"
 
-
+def list_files(directory_path: str, file_extension: str = '.mp4') -> List[Dict[str, Union[str, int]]]:
+    """
+    列出指定目录下特定扩展名的文件，并为每个文件创建包含文件名、完整路径及文件大小的字典。
+    
+    :param directory_path: 目录路径
+    :param file_extension: 需要列出的文件扩展名
+    :return: 包含文件信息的字典列表
+    """
+    if not os.path.exists(directory_path):
+        return []
+    filtered_files = [f for f in os.listdir(directory_path) if f.endswith(file_extension)]
+    videos = [
+        {
+            'filename': filename,
+            'full_path': os.path.join(directory_path, filename),
+            'size': get_file_size(os.path.join(directory_path, filename))
+        } 
+        for filename in filtered_files
+    ]
+    return videos
 
 

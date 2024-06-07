@@ -110,11 +110,11 @@ def download_video_ajax(session):
     resolution = request.form.get('resolution')
     video_url = clean_reship_url(request.form.get('video_url'))
 
-    print("获取视频标题等...")
     info = get_youtube_info(video_url)
     session['origin_title'] = info["title"]
     session['origin_id'] = info["id"]
     session['origin_file_size'] = info["file_size"]
+    print("获取了视频标题等...", info)
 
     session['video_url'] = video_url
     session['resolution'] = resolution
@@ -122,6 +122,7 @@ def download_video_ajax(session):
     session['bili_jct'] = request.form.get('bili_jct')
     session['buvid3'] = request.form.get('buvid3')
     session['need_subtitle'] = need_subtitle
+    session['auto_upload'] = request.form.get('auto_upload')
 
     task_id = str(uuid.uuid4())
     task_status[task_id] = {'status': 'running', 'progress': '', 'title': session['origin_title']}

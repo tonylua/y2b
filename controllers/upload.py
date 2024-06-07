@@ -40,19 +40,20 @@ async def upload_controller(session):
 
             if not subtitles_exist:
                 video_id = session['origin_id']
-                try:
-                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                    transcript = transcript_list.find_transcript(['en'])
-                    if need_subtitle == 'cn':
-                        transcript = transcript.translate('zh-Hans')
-                    formatter = SRTFormatter()
-                    srt_formatted = formatter.format_transcript(transcript.fetch())
-                    with open(subtitles_path, 'w', encoding='utf-8') as srt_file:
-                        srt_file.write(srt_formatted)
-                    print(f"补充了字幕 {subtitles_path}")
-                    subtitles_exist = os.path.exists(subtitles_path)
-                except Exception as e:
-                    print(e)
+                print(f"尝试补充字幕 {video_id}")
+                # try:
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                transcript = transcript_list.find_transcript(['en'])
+                if need_subtitle == 'cn':
+                    transcript = transcript.translate('zh-Hans')
+                formatter = SRTFormatter()
+                srt_formatted = formatter.format_transcript(transcript.fetch())
+                with open(subtitles_path, 'w', encoding='utf-8') as srt_file:
+                    srt_file.write(srt_formatted)
+                print(f"补充了字幕 {subtitles_path}")
+                subtitles_exist = os.path.exists(subtitles_path)
+                # except Exception as e:
+                #     print(e)
 
             if (subtitles_exist):
                 video_path = f"{session['save_dir']}/with_srt_{session['save_video']}"
@@ -78,6 +79,9 @@ async def upload_controller(session):
                 need_subtitle = False
                 title = f"[转] {title}"
         title = truncate_str(cleaned_text(title), 77)
+
+        if not session['auto_upload']:
+            return redirect(url_for(Route.PREVIEW) + f"?parsed=1")
 
         args = {
             "sessdata": form.sessdata.data,

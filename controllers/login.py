@@ -12,8 +12,10 @@ def login_controller(session):
             if account['username'] == username and account['password'] == password:
                 print(f"Login successful! {username}", 'success')
                 session["login_name"] = username
-                return redirect(url_for('download')) 
-        
+                session['save_dir_rel'] = f"video/{username}"
+                session['save_dir'] = f"/root/move_video/static/{session['save_dir_rel']}"
+                return redirect(url_for('list_page')) 
+
         flash('Invalid username or password.', 'error')
 
     return render_template('login.html')
