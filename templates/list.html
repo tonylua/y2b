@@ -22,9 +22,10 @@
                 <td>{{ video.created }}</td>
                 <td>{{ video.status }}</td>
                 <td>
-                    {% if video.status == 'downloaded' %}
+                    {% if video.status == VideoStatus.DOWNLOADED %}
                     <button class="btn btn-primary">upload</button>
                     {% endif %}
+                    <button class="btn">delete</button>
                 </td>
             </tr>
         {% endfor %}

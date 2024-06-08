@@ -11,7 +11,7 @@ from youtube_transcript_api.formatters import SRTFormatter
 from forms.download import YouTubeDownloadForm
 from utils.string import clean_reship_url,cleaned_text, truncate_str
 from utils.account import AccountUtil, get_youtube_info
-from utils.constants import Route
+from utils.constants import Route, VideoStatus
 from utils.sys import run_cli_command, clear_video_directory, find_cover_images
 from utils.dict import pick
 from utils.db import VideoDB
@@ -89,7 +89,7 @@ async def do_upload(task_id, db_vid):
     if not session['auto_upload']:
         # rename_completed_file(origin_video_path, '.unuploaded')
         db_update_args += {
-            "status": "downloaded" # 只有非自动上传时才让列表页识别已下载状态
+            "status": VideoStatus.DOWNLOADED # 只有非自动上传时才让列表页识别已下载状态
         }
         db.update_video(db_vid, **db_update_args)
         return redirect(url_for(Route.LIST))
@@ -123,12 +123,12 @@ async def do_upload(task_id, db_vid):
     async def ev(data):
         print('上传完成', data)
         db_update_args += pick(vu_data, ["desc", "tid", "tags"])
-        db_update_args["status"] = "uploaded"
+        db_update_args["status"] = VideoStatus.UPLOADED
         db.update_video(db_vid, **db_update_args)
 
     print("开始上传...");
     try:
-        db.update_video(db_vid, status='uploading')
+        db.update_video(db_vid, status=VideoStatus.UPLOADING)
         await uploader.start()
     except bilibili_api.exceptions.NetworkException as e:
         flash("bilibili_api 403，请尝试更新cookie信息", "warning")
@@ -141,13 +141,13 @@ async def do_upload(task_id, db_vid):
 def create_progress_hook(task_id):
     def hook(d):
         if d['status'] == 'finished':
-            task_status[task_id]['status'] = 'running'
+            task_status[task_id]['status'] = VideoStatus.DOWNLOADING
             task_status[task_id]['progress'] = '100%'
         elif d['status'] == 'downloading':
-            task_status[task_id]['status'] = 'running'
+            task_status[task_id]['status'] = VideoStatus.DOWNLOADING
             task_status[task_id]['progress'] = d['_percent_str']
         elif d['status'] == 'error':
-            task_status[task_id]['status'] = 'error'
+            task_status[task_id]['status'] = VideoStatus.ERROR
             task_status[task_id]['progress'] = 'ERR'
     return hook
 
@@ -155,7 +155,7 @@ def run_yt_dlp(url, ydl_opts, task_id, db_vid):
     with YoutubeDL(ydl_opts) as ydl:
         print("开始下载...")
         ydl.download([url])
-    task_status[task_id]['status'] = 'completed'
+    task_status[task_id]['status'] = VideoStatus.DOWNLOADED
     # rename_completed_file(task_status[task_id]['path'])
     do_upload(task_id, db_vid)
 
@@ -219,7 +219,7 @@ def download_controller(session):
             'progress_hooks': [create_progress_hook(task_id)],
         }
         task_status[task_id] = {
-            'status': 'running', 
+            'status': VideoStatus.DOWNLOADING, 
             'progress': '', 
             'id': video_id,
             'title': session['origin_title'],
@@ -236,7 +236,7 @@ def download_controller(session):
         )
 
         print('准备下载', task_id, '\n', opts)
-        db.update_video(db_vid, status='downloading')
+        db.update_video(db_vid, status=VideoStatus.DOWNLOADING)
         thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id, db_vid))
         thread.start()
 

@@ -6,3 +6,11 @@ class Route(str, Enum):
     LIST = 'list_page'
     PREVIEW = 'preview'
     UPLOAD = 'upload'
+
+class VideoStatus(str, Enum):
+    PENDING = 'pending'
+    DOWNLOADING = 'downloading'
+    DOWNLOADED = 'downloaded'
+    UPLOADING = 'uploading'
+    UPLOADED = 'uploaded'
+    ERROR = 'error'
