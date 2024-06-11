@@ -160,3 +160,13 @@ if vim.fn.has("wsl") == 1 then
 end
 ```
 history 50 | lvim -
+
+# https://gist.github.com/libChan/3a804a46b532cc326a2ee55b27e8ac19 
+```
+1. win防火墙要允许通过clash公网
+2. clash允许LAN
+3. ~/.bashrc 中添加
+export hostip=$(cat /etc/resolv.conf |grep -oP '(?<=nameserver\ ).*')
+export https_proxy="http://${hostip}:7890"
+export http_proxy="http://${hostip}:7890"
+```
