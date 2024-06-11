@@ -9,7 +9,10 @@ from controllers.login import login_controller
 from controllers.download2 import download_controller
 from controllers.list import list_controller
 
-app = Flask(__name__, template_folder='/root/move_video/templates')
+current_file_path = os.path.abspath(__file__)
+current_dir = os.path.dirname(current_file_path)
+
+app = Flask(__name__, template_folder=f'{current_dir}/templates')
 app.config['SECRET_KEY'] = secrets.token_urlsafe(32) 
 app.config['SESSION_TYPE'] = 'filesystem'
 

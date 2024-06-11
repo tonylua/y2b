@@ -12,7 +12,7 @@ from forms.download import YouTubeDownloadForm
 from utils.string import clean_reship_url,cleaned_text, truncate_str
 from utils.account import AccountUtil, get_youtube_info
 from utils.constants import Route, VideoStatus
-from utils.sys import run_cli_command, clear_video_directory, find_cover_images
+from utils.sys import join_root_path, run_cli_command, clear_video_directory, find_cover_images
 from utils.dict import pick
 from utils.db import VideoDB
 
@@ -163,7 +163,7 @@ def download_controller(session):
     user = session['login_name']
 
     try:
-        bili = AccountUtil(config_path="/root/move_video/bili_cookie.json")
+        bili = AccountUtil(config_path=join_root_path("bili_cookie.json"))
         bili_cookies = bili.verify_cookie()
         print("bilibili 登录信息有效：%s" % bili_cookies['user_name'])
     except Exception as e:

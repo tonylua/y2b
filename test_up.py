@@ -2,7 +2,7 @@ import bilibili_api
 from bilibili_api import sync, video_uploader, channel_series, Credential
 from utils.account import AccountUtil
 from utils.string import truncate_str
-from utils.sys import run_cli_command
+from utils.sys import join_root_path 
 from typing import List
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import SRTFormatter
@@ -14,8 +14,7 @@ async def main():
     transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
     transcript = transcript_list.find_transcript(['en', 'zh-Hans'])
     translated_transcript = transcript.translate('zh-Hans')
-    print(1111, transcript)
-    print(2222, translated_transcript, type(translated_transcript))
+    # print(2222, translated_transcript, type(translated_transcript))
     formatter = SRTFormatter()
     srt_formatted = formatter.format_transcript(translated_transcript.fetch())
     with open('static/video/test_trans.srt', 'w', encoding='utf-8') as srt_file:
