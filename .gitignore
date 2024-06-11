@@ -1,4 +1,5 @@
 static/video
+db/*.db
 __pycache__
 bili_cookie.json
 app_accounts.json
