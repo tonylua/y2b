@@ -1,0 +1,124 @@
+sudo apt update
+sudo apt install git
+sudo apt install python3
+sudo apt install python3-pip
+apt install python3.11-venv
+python3 -m venv app-venv
+
+source app-venv/bin/activate
+pip install pipreqs
+pipreqs --ignore bin,etc,include,lib,lib64 .
+deactivate 
+
+sudo apt install net-tools -y
+ifconfig
+
+source app-venv/bin/activate
+pip install wheel
+sudo apt-get install python-lxml
+sudo apt-get install libxml2-dev libxslt-dev python3.11-dev
+pip install -r requirements.txt
+sudo pip install lxml
+deactivate 
+
+sudo pip install lxml
+sudo pip install python3-lxml
+source app-venv/bin/activate
+pip install lxml
+pip install -r requirements.txt
+pip install wheel
+pip install -r requirements.txt
+deactivate 
+
+source app-venv/bin/activate
+pip3 install "cython<3.0" wheel && pip3 install --no-build-isolation "pyyaml==5.4.1" && pipenv sync --system 
+pip install -r requirements.txt
+curl https://lxml.de/files/lxml-5.2.2.tgz -O lxml-5.2.2.tgz
+deactivate 
+
+sudo apt-get install wget
+wget https://lxml.de/files/lxml-5.2.2.tgz
+tar -xf lxml-5.2.2.tar 
+ls lxml-5.2.2
+source app-venv/bin/activate
+pip install -r requirements.txt
+deactivate 
+
+sudo apt-get install build-essential python3-dev libxml2-dev libxslt1-dev zlib1g-dev libffi-dev
+source app-venv/bin/activate
+pip install lxml
+pip install -r requirements.txt
+pip install --upgrade pip
+pip install lxml
+pip install -r requirements.txt
+pip3 install wheel setuptools --upgrade
+python3 -m pip install wheel setuptools --upgrade
+pip install -r requirements.txt
+deactivate 
+
+update-alternatives --list python
+sudo apt-get remove --purge python3
+sudo apt-get remove --purge python3-pip
+wget https://www.python.org/ftp/python/3.10.7/Python-3.10.7.tgz
+tar -xzf Python-3.10.7.tgz 
+cd Python-3.10.7
+
+make altinstall
+sudo make altinstall
+update-alternatives --list python
+sudo update-alternatives --install /usr/bin/python python /usr/local/lib/python3.10 1
+update-alternatives --list python
+update-alternatives --config python
+update-alternativescurl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+sudo pip install curl
+wget https://bootstrap.pypa.io/get-pip.py
+sudo apt-get install libssl-dev
+python3.10 -c "import ssl; print(ssl.OPENSSL_VERSION)"
+cd Python-3.10.7
+./configure --with-openssl=/usr/local/opt/openssl@1.1
+sudo make clean
+sudo make -j 2
+sudo make altinstall
+python3.10 -c "import ssl; print(ssl.OPENSSL_VERSION)"
+cd ..
+python3.10 get-pip.py
+sudo rm /usr/bin/python3
+sudo ln -s /usr/local/bin/python3.10 /usr/bin/python3
+sudo rm /usr/bin/python
+sudo ln -s /usr/local/bin/python3.10 /usr/bin/python
+
+cd y2b/
+source app-venv/bin/activate
+pip install -r requirements.txt
+vi index.py 
+pwd
+grep -rn --exclude-dir=app-venv "/root" *
+sudo apt-get install curl
+curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux64.tar.gz
+mv nvim-linux64.tar.gz ..
+cd ..
+curl google.com
+sudo rm -rf /opt/nvim
+sudo tar -C /opt -xzf nvim-linux64.tar.gz
+vi ~/.bashrc 
+nvim
+source ~/.bashrc 
+nvim
+sudo apt install nodejs npm -y
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
+sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
+mv ripgrep_14.1.0-1_amd64.deb ..
+# https://blog.csdn.net/qq_28550263/article/details/130758057
+nvim ~/.cargo/config
+LV_BRANCH='release-1.4/neovim-0.9' bash <(curl -s https://raw.gitmirror.com/LunarVim/LunarVim/release-1.4/neovim-0.9/utils/installer/install.sh)
+nvim
+lvim
+cd y2b/
+lvim
+grep -rn --exclude-dir=app-venv "/root" *
+cd y2b/
+git status
+git commit -am "fix"
+git push
+history | lvim -
