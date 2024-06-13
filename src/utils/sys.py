@@ -9,7 +9,7 @@ from typing import List, Dict, Union, Tuple, Callable
 def join_root_path(*paths):
     current_file_path = os.path.abspath(__file__)
     current_dir = os.path.dirname(current_file_path)
-    root_dir = os.path.join(current_dir, '..')
+    root_dir = os.path.join(current_dir, '../..')
     return os.path.abspath(os.path.join(root_dir, *paths));
 
 def rename_completed_file(file_path, replaced_str = ''):

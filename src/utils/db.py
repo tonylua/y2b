@@ -1,10 +1,8 @@
 import sqlite3
 from contextlib import contextmanager
-import os
+from .sys import join_root_path
 
-current_file_path = os.path.abspath(__file__)
-current_dir = os.path.dirname(current_file_path)
-db_dir = os.path.join(current_dir, '../db')
+db_dir = join_root_path('db')
 
 class BaseORM:
     def __init__(self, db_name):
@@ -14,6 +12,10 @@ class BaseORM:
         print('db path', db_path)
         self.cursor = self.conn.cursor()
 
+    def __del__(self):
+        if hasattr(self, 'conn') and self.conn:
+            self.conn.close()
+
     @contextmanager
     def transaction(self):
         try:
@@ -22,8 +24,6 @@ class BaseORM:
         except Exception as e:
             self.conn.rollback()
             raise e
-        finally:
-            self.conn.close()
 
 class VideoDB(BaseORM):
     def __init__(self, db_name = 'database.db'):

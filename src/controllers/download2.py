@@ -151,13 +151,13 @@ def create_progress_hook(task_id):
             task_status[task_id]['progress'] = 'ERR'
     return hook
 
-def run_yt_dlp(url, ydl_opts, task_id, db_vid):
+async def run_yt_dlp(url, ydl_opts, task_id, db_vid):
     with YoutubeDL(ydl_opts) as ydl:
         print("开始下载...")
         ydl.download([url])
     task_status[task_id]['status'] = VideoStatus.DOWNLOADED
     # rename_completed_file(task_status[task_id]['path'])
-    do_upload(task_id, db_vid)
+    await do_upload(task_id, db_vid)
 
 def download_controller(session):
     user = session['login_name']
@@ -234,9 +234,9 @@ def download_controller(session):
             save_path = save_path, 
             title = info["title"]
         )
+        db.update_video(db_vid, status=VideoStatus.DOWNLOADING)
 
         print('准备下载', task_id, '\n', opts)
-        db.update_video(db_vid, status=VideoStatus.DOWNLOADING)
         thread = Thread(target=run_yt_dlp, args=(video_url, opts, task_id, db_vid))
         thread.start()
 
