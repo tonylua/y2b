@@ -1,5 +1,4 @@
-import os
-from flask import Flask, session, request, redirect, url_for, render_template, jsonify
+from flask import Flask, render_template
 from utils.db import VideoDB
 from utils.constants import VideoStatus
 

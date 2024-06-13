@@ -21,7 +21,7 @@ def load_app_accounts() -> List[Dict[str, Any]]:
                  {'username': 'user2', 'password': 'hashed_password2'}
              ]
     """
-    with open(join_root_path('app_accounts.json'), 'r') as file:
+    with open(join_root_path('config/app_accounts.json'), 'r') as file:
         accounts_data = json.load(file)
     return accounts_data['users']
 

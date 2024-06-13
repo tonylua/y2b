@@ -17,7 +17,7 @@ def download_controller(session):
     session['save_srt_cn'] = 'video.zh-Hans.srt'
 
     try:
-        bili = AccountUtil(config_path=join_root_path("bili_cookie.json"))
+        bili = AccountUtil(config_path=join_root_path("config/bili_cookie.json"))
         bili_cookies = bili.verify_cookie()
         # for key, value in bili_cookies.items():
         #     session[key] = value

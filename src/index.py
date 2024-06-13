@@ -1,5 +1,5 @@
-import secrets
 import os
+import secrets
 from functools import wraps
 from flask import Flask, g, session, request, flash, redirect, url_for  
 from controllers.login import login_controller
@@ -7,6 +7,7 @@ from controllers.login import login_controller
 # from controllers.preview import preview_controller
 # from controllers.upload import upload_controller
 from controllers.download2 import download_controller
+from controllers.delete import delete_controller
 from controllers.list import list_controller
 
 current_file_path = os.path.abspath(__file__)
@@ -46,6 +47,10 @@ def login():
 @login_required
 def download():
     return download_controller(session)
+
+@app.route('/delete/<video_id>', methods=['GET']) 
+def delete(video_id):
+    return delete_controller(session, video_id)
 
 # @app.route('/download_video', methods=['POST'])
 # def download_ajax():

@@ -45,7 +45,8 @@ class VideoDB(BaseORM):
         with self.transaction():
             query = f"SELECT * FROM {self.table_name} WHERE id = ? ;"
             self.cursor.execute(query, (id,))
-            return self.cursor.fetchone()
+            row = self.cursor.fetchone()
+            return dict(row)
     
     def list_videos(self, user):
         """列出所有视频记录"""
