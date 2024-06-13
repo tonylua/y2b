@@ -5,8 +5,8 @@ from flask import Flask, g, session, request, flash, redirect, url_for
 from controllers.login import login_controller
 # from controllers.download import download_controller, download_video_ajax, download_status_ajax
 # from controllers.preview import preview_controller
-# from controllers.upload import upload_controller
 from controllers.download2 import download_controller
+from controllers.upload2 import upload_controller
 from controllers.delete import delete_controller
 from controllers.list import list_controller
 
@@ -65,9 +65,9 @@ def delete(video_id):
 # def preview():
 #     return preview_controller(session)
 
-# @app.route('/upload', methods=['GET', 'POST']) 
-# async def upload():
-#     return await upload_controller(session)
+@app.route('/upload', methods=['POST']) 
+async def upload():
+    return await upload_controller(session)
 
 @app.route('/list', methods=['GET'])
 @login_required
