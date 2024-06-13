@@ -1,4 +1,4 @@
-pip3 install bilibili-api-python
+## 初始化
 
 sudo apt-get install fonts-arphic-ukai fonts-arphic-uming
 
@@ -9,7 +9,14 @@ vim /usr/local/lib/python3.11/dist-packages/bilibili_api/video_uploader.py
 # 56x行meta中增加：
 "source": self.source,
 
+## DB
+
 sudo apt-get install sqlite3
 python db/init_db.py
 sqlite3 db/database.db
 SELECT * FROM videos;
+
+
+## 转换参数
+
+python cli_to_api.py --extractor-arg "youtube:player_client=ios"
