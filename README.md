@@ -1,5 +1,7 @@
 ## 初始化
 
+sudo apt install ffmpeg
+
 sudo apt-get install fonts-arphic-ukai fonts-arphic-uming
 
 vim /usr/local/lib/python3.11/dist-packages/bilibili_api/video_uploader.py
