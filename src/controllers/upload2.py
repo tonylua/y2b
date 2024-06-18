@@ -25,15 +25,16 @@ async def do_upload(video_id):
     title = record['title']
     orig_id = g.session['origin_id']
     
-    origin_video_path = get_path(session_item["save_video"])
+    origin_video_path = get_path(g.session["save_video"])
+    video_path = origin_video_path
 
-    need_subtitle = session_item['need_subtitle']
+    need_subtitle = g.session['need_subtitle']
     subtitle_title_map = {
         'en': '英字',
         'cn': '中字'
     }
     if (need_subtitle):
-        subtitles_path = get_path(session_item["save_srt_{need_subtitle}"])
+        subtitles_path = get_path(g.session["save_srt_{need_subtitle}"])
         subtitles_exist = os.path.exists(subtitles_path)
 
         if not subtitles_exist:
@@ -50,7 +51,7 @@ async def do_upload(video_id):
             subtitles_exist = os.path.exists(subtitles_path)
 
         if (subtitles_exist):
-            video_path = get_path(f"with_srt_{session['save_video']}")
+            video_path = get_path(f"with_srt_{g.session['save_video']}")
             title = f"[{subtitle_title_map.get(need_subtitle, '转')}] {title}"
             
             ff_args = [
@@ -84,11 +85,12 @@ async def do_upload(video_id):
         "save_srt": subtitles_path if need_subtitle else None
     }
 
-    if not session['auto_upload']:
+    if not g.session['auto_upload']:
         # rename_completed_file(origin_video_path, '.unuploaded')
-        db_update_args += {
+        db_update_args.update({
             "status": VideoStatus.DOWNLOADED # 只有非自动上传时才让列表页识别已下载状态
-        }
+        })
+        print("not need auto_upload", db_update_args)
         db.update_video(video_id, **db_update_args)
         return redirect(url_for(Route.LIST))
 
