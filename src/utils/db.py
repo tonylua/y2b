@@ -7,7 +7,7 @@ db_dir = join_root_path('db')
 class BaseORM:
     def __init__(self, db_name):
         db_path = f"{db_dir}/{db_name}"
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row  # 设置row_factory，以便查询时使用字典结果
         print('db __init__: path', db_path)
         self.cursor = self.conn.cursor()
@@ -31,7 +31,7 @@ class VideoDB(BaseORM):
         self.table_name = 'videos'
 
     def create_video(self, user, origin_id, title, save_path, origin_url):
-        print('db create_video', title)
+        print('DB CREATE_VIDEO', title)
         """插入一条新的视频记录"""
         with self.transaction():
             query = f"""
@@ -58,7 +58,7 @@ class VideoDB(BaseORM):
             return [dict(row) for row in self.cursor.fetchall()]  # 转换为字典列表
 
     def update_video(self, id, **kwargs):
-        print('db update_video', id)
+        print('DB UPDATE_VIDEO', id, kwargs)
         """根据ID更新视频记录"""
         set_clause = ', '.join([f"{key} = ?" for key in kwargs])
         with self.transaction():
@@ -71,8 +71,8 @@ class VideoDB(BaseORM):
             self.cursor.execute(query, values)
 
     def delete_video(self, id):
-        print('db delete_video', id)
         """根据ID删除视频记录"""
         with self.transaction():
             query = f"DELETE FROM {self.table_name} WHERE id = ?;"
+            print('DB DELETE_VIDEO', query, id)
             self.cursor.execute(query, (id,))

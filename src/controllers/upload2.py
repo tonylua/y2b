@@ -1,6 +1,6 @@
 import os
 import subprocess
-from flask import Flask, g, request, redirect, url_for, flash
+from flask import Flask, request, redirect, url_for, flash
 import bilibili_api
 from bilibili_api import video_uploader, Credential
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -12,10 +12,10 @@ from utils.dict import pick
 from utils.db import VideoDB
 
 
-def get_path(key):
-    return f"{g.session['save_dir']}/{key}"
+def get_path(session, key):
+    return f"{session['save_dir']}/{key}"
 
-async def do_upload(video_id):
+async def do_upload(session, video_id):
     db = VideoDB()
 
     # task = task_status[task_id]
@@ -23,18 +23,18 @@ async def do_upload(video_id):
      
     record = db.read_video(video_id)
     title = record['title']
-    orig_id = g.session['origin_id']
+    orig_id = session['origin_id']
     
-    origin_video_path = get_path(g.session["save_video"])
+    origin_video_path = get_path(session, session["save_video"])
     video_path = origin_video_path
 
-    need_subtitle = g.session['need_subtitle']
+    need_subtitle = session['need_subtitle']
     subtitle_title_map = {
         'en': '英字',
         'cn': '中字'
     }
     if (need_subtitle):
-        subtitles_path = get_path(g.session["save_srt_{need_subtitle}"])
+        subtitles_path = get_path(session, session["save_srt_{need_subtitle}"])
         subtitles_exist = os.path.exists(subtitles_path)
 
         if not subtitles_exist:
@@ -51,7 +51,7 @@ async def do_upload(video_id):
             subtitles_exist = os.path.exists(subtitles_path)
 
         if (subtitles_exist):
-            video_path = get_path(f"with_srt_{g.session['save_video']}")
+            video_path = get_path(session, f"with_srt_{session['save_video']}")
             title = f"[{subtitle_title_map.get(need_subtitle, '转')}] {title}"
             
             ff_args = [
@@ -75,17 +75,17 @@ async def do_upload(video_id):
             title = f"[转] {title}"
     title = truncate_str(cleaned_text(title), 77)
 
-    cover = find_cover_images(g.session['save_dir'])
+    cover = find_cover_images(session['save_dir'])
     if not cover:
-        raise FileNotFoundError('封面不存在', g.session['origin_id'])
+        raise FileNotFoundError('封面不存在', session['origin_id'])
 
     db_update_args = {
         "title": title,
-        "cover": cover,
+        "save_cover": cover,
         "save_srt": subtitles_path if need_subtitle else None
     }
 
-    if not g.session['auto_upload']:
+    if not session['auto_upload']:
         # rename_completed_file(origin_video_path, '.unuploaded')
         db_update_args.update({
             "status": VideoStatus.DOWNLOADED # 只有非自动上传时才让列表页识别已下载状态
@@ -95,19 +95,19 @@ async def do_upload(video_id):
         return redirect(url_for(Route.LIST))
 
     args = {
-        "sessdata": g.session['SESSDATA'],
-        "bili_jct": g.session['bili_jct'],
-        "buvid3": g.session['buvid3']
+        "sessdata": session['SESSDATA'],
+        "bili_jct": session['bili_jct'],
+        "buvid3": session['buvid3']
     }
     credential = Credential(**args)
-    desc = f"via. {g.session['video_url']}"
+    desc = f"via. {session['video_url']}"
     vu_data = {
-        'tid': g.session['tid'],
+        'tid': session['tid'],
         'original': True,  # TODO 设置转载报错
         'source': 'youtube',
         'no_reprint': True,
         'title': title,
-        'tags': g.session['tags'],
+        'tags': session['tags'],
         'desc': desc,
         'cover': cover
     }
@@ -140,5 +140,5 @@ async def do_upload(video_id):
 
 async def upload_controller(session):
     video_id = request.form.get('video_id')
-    await do_upload(video_id)
+    await do_upload(session, video_id)
     return redirect(url_for(Route.LIST))

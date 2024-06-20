@@ -21,8 +21,8 @@ class YouTubeDownloadForm(FlaskForm):
     )
     auto_upload = RadioField(
         '自动上传',
-        choices=[(1, '是'), (0, '否')],
-        default=1
+        choices=[('1', '是'), ('', '否')],
+        default='1'
     )
     tid = IntegerField('Tid', default=231, validators=[DataRequired()])
     tags = StringField('Tags', default='Youtube')

@@ -8,7 +8,7 @@ CREATE TABLE videos (
     desc TEXT,
     save_path TEXT NOT NULL,
     save_srt TEXT,
-    save_cover,
+    save_cover TEXT,
     origin_id TEXT NOT NULL,
     origin_url TEXT NOT NULL,
     size INTEGER,

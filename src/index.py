@@ -27,16 +27,16 @@ def inject_global_vars():
 @app.before_request
 def setup_session():
     session.permanent = True 
-    g.session = session
+    # g.session = session
 
 def login_required(view):
     @wraps(view)
-    def wrapped_view(**kwargs):
-        if 'login_name' not in session:
-            flash('请先登录', 'danger') 
-            return redirect(url_for('login'))
-        print(session['login_name'], '已登录', request.headers.get('User-Agent'))
-        return view(**kwargs)
+    def wrapped_view(*args, **kwargs):
+        if 'login_name' in session:
+            print(session['login_name'], '已登录', request.headers.get('User-Agent'))
+            return view(*args, **kwargs)
+        flash('请先登录', 'danger') 
+        return redirect(url_for('login'))
     return wrapped_view
 
 @app.route('/', methods=['GET', 'POST'])
@@ -46,7 +46,7 @@ def login():
 @app.route('/download', methods=['GET', 'POST'])
 @login_required
 def download():
-    return download_controller(session)
+    return download_controller(app, session)
 
 @app.route('/delete/<video_id>', methods=['GET']) 
 def delete(video_id):

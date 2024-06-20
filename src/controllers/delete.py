@@ -18,13 +18,14 @@ def delete_video_and_related_files(video_id):
         # 获取path所在目录
         directory = os.path.dirname(path)
         
-        # 遍历目录下所有文件，删除文件名中包含id的文件
-        for filename in os.listdir(directory):
-            if id_to_match in filename:
-                file_path = os.path.join(directory, filename)
-                if os.path.isfile(file_path):  # 确保是文件而不是目录
-                    os.remove(file_path)
-                    print(f'已删除与 {id_to_match} 相关的文件: {file_path}')
+        if os.path.exists(directory):
+            # 遍历目录下所有文件，删除文件名中包含id的文件
+            for filename in os.listdir(directory):
+                if id_to_match in filename:
+                    file_path = os.path.join(directory, filename)
+                    if os.path.isfile(file_path):  # 确保是文件而不是目录
+                        os.remove(file_path)
+                        print(f'已删除与 {id_to_match} 相关的文件: {file_path}')
         
         # 删除数据库中的记录
         db.delete_video(video_id)

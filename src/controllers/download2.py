@@ -1,7 +1,7 @@
 import os
 import uuid
 import asyncio
-from flask import Flask, request, redirect, url_for, render_template, jsonify, flash
+from flask import Flask, request, redirect, url_for, render_template, copy_current_request_context 
 from threading import Thread
 from yt_dlp import YoutubeDL
 from forms.download import YouTubeDownloadForm
@@ -27,13 +27,13 @@ def create_progress_hook(task_id):
             task_status[task_id]['progress'] = 'ERR'
     return hook
 
-async def run_yt_dlp(url, ydl_opts, task_id, video_id):
+async def run_yt_dlp(session, url, ydl_opts, task_id, video_id):
     with YoutubeDL(ydl_opts) as ydl:
         print("开始下载...", video_id)
         ydl.download([url])
     task_status[task_id]['status'] = VideoStatus.DOWNLOADED
     # rename_completed_file(task_status[task_id]['path'])
-    await do_upload(video_id)
+    await do_upload(session, video_id)
 
 def async_yt_dlp_in_thread(*args):
     loop = asyncio.new_event_loop()
@@ -41,13 +41,14 @@ def async_yt_dlp_in_thread(*args):
     try:
         loop.run_until_complete(run_yt_dlp(*args))  
     except Exception as e:
-        db = VideoDB()
         video_id = args[2]
+        print('async_yt_dlp_in_thread ERR', e, video_id)
+        db = VideoDB()
         db.update_video(video_id, status=VideoStatus.ERROR)
     finally:
         loop.close() 
 
-def download_controller(session):
+def download_controller(app, session):
     user = session['login_name']
 
     try:
@@ -125,7 +126,9 @@ def download_controller(session):
         db.update_video(video_id, status=VideoStatus.DOWNLOADING)
 
         print('准备下载', task_id, '\n', opts)
-        thread = Thread(target=async_yt_dlp_in_thread, args=(video_url, opts, task_id, video_id))
+        current_session = session._get_current_object()
+        thread = Thread(target=async_yt_dlp_in_thread, args=(current_session, video_url, opts, task_id, video_id))
+        # thread = Thread(target=run_yt_dlp, args=(current_session, video_url, opts, task_id, video_id))
         thread.start()
 
         return redirect(url_for(Route.LIST))
