@@ -30,15 +30,15 @@ class VideoDB(BaseORM):
         super().__init__(db_name)
         self.table_name = 'videos'
 
-    def create_video(self, user, origin_id, title, save_path, origin_url):
+    def create_video(self, user, origin_id, title, save_path, save_srt, origin_url, subtitle_lang = ''):
         print('DB CREATE_VIDEO', title)
         """插入一条新的视频记录"""
         with self.transaction():
             query = f"""
-            INSERT INTO {self.table_name} (user, origin_id, title, save_path, origin_url)
-            VALUES (?, ?, ?, ?, ?);
+            INSERT INTO {self.table_name} (user, origin_id, title, save_path, save_srt, origin_url, subtitle_lang)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
             """
-            self.cursor.execute(query, (user, origin_id, title, save_path, origin_url))
+            self.cursor.execute(query, (user, origin_id, title, save_path, save_srt, origin_url, subtitle_lang))
             return self.cursor.lastrowid
 
     def read_video(self, id):

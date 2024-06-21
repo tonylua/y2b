@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, redirect, url_for, render_template, flash 
 from yt_dlp import YoutubeDL
 from forms.download import YouTubeDownloadForm
@@ -12,47 +13,56 @@ from utils.sys import join_root_path
 from utils.db import VideoDB
 from .upload2 import do_upload
 
-task_status = {}
-
-def create_progress_hook(task_id):
-    def hook(d):
-        if d['status'] == 'finished':
-            task_status[task_id]['status'] = VideoStatus.DOWNLOADING
-            task_status[task_id]['progress'] = '100%'
-        elif d['status'] == 'downloading':
-            task_status[task_id]['status'] = VideoStatus.DOWNLOADING
-            task_status[task_id]['progress'] = d['_percent_str']
-        elif d['status'] == 'error':
-            task_status[task_id]['status'] = VideoStatus.ERROR
-            task_status[task_id]['progress'] = 'ERR'
-    return hook
+# task_status = {}
+# def create_progress_hook(task_id):
+#     def hook(d):
+#         if d['status'] == 'finished':
+#             task_status[task_id]['status'] = VideoStatus.DOWNLOADING
+#             task_status[task_id]['progress'] = '100%'
+#         elif d['status'] == 'downloading':
+#             task_status[task_id]['status'] = VideoStatus.DOWNLOADING
+#             task_status[task_id]['progress'] = d['_percent_str']
+#         elif d['status'] == 'error':
+#             task_status[task_id]['status'] = VideoStatus.ERROR
+#             task_status[task_id]['progress'] = 'ERR'
+#     return hook
 
 async def run_yt_dlp(session, url, ydl_opts, task_id, video_id):
     with YoutubeDL(ydl_opts) as ydl:
         print("开始下载...", video_id)
         ydl.download([url])
-    task_status[task_id]['status'] = VideoStatus.DOWNLOADED
-    # rename_completed_file(task_status[task_id]['path'])
-    is_succ, msg = await do_upload(session, video_id)
-    if is_succ:
-        return redirect(url_for(Route.LIST))
-    flash(msg, 'warning')
-    return redirect(url_for(Route.LOGIN))
+    # task_status[task_id]['status'] = VideoStatus.DOWNLOADED
+    result = await do_upload(session, video_id)
+    return result
 
-def async_yt_dlp_in_thread(*args):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop) 
+async def yt_dlp_worker(*args):
     try:
-        loop.run_until_complete(run_yt_dlp(*args))  
+        return await run_yt_dlp(*args)
     except Exception as e:
         video_id = args[2]
         print('async_yt_dlp_in_thread ERR', e, video_id)
         db = VideoDB()
         db.update_video(video_id, status=VideoStatus.ERROR)
-    finally:
-        loop.close() 
+        return False, e
 
-def download_controller(app, session):
+def yt_dlp_sync_wrapper(*args):
+    """同步包装器，用于在非异步上下文中运行异步函数"""
+    return asyncio.run(yt_dlp_worker(*args))
+
+# def async_yt_dlp_in_thread(*args):
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop) 
+#     try:
+#         loop.run_until_complete(run_yt_dlp(*args))  
+#     except Exception as e:
+#         video_id = args[2]
+#         print('async_yt_dlp_in_thread ERR', e, video_id)
+#         db = VideoDB()
+#         db.update_video(video_id, status=VideoStatus.ERROR)
+#     finally:
+#         loop.close() 
+
+def download_controller(session):
     user = session['login_name']
 
     try:
@@ -77,6 +87,7 @@ def download_controller(app, session):
         }
         need_subtitle = request.form.get('need_subtitle')
         session['need_subtitle'] = need_subtitle
+        subtitle_locale = subtitle_map.get(need_subtitle, '') 
 
         video_url = clean_reship_url(request.form.get('video_url'))
         session['video_url'] = video_url
@@ -98,26 +109,26 @@ def download_controller(app, session):
 
         task_id = str(uuid.uuid4())
         session['save_video'] = f"{orig_id}.{session['resolution']}.mp4"
-        # session['save_video'] = f"{orig_id}.{session['resolution']}.tmp.mp4"
-        session['save_srt_en'] = f"{orig_id}.en.srt"
-        session['save_srt_cn'] = f"{orig_id}.zh-Hans.srt"
+        # session['save_srt_en'] = f"{orig_id}.en.srt"
+        # session['save_srt_cn'] = f"{orig_id}.zh-Hans.srt"
         save_path = os.path.join(session['save_dir'], session['save_video'])
+        save_srt = os.path.join(session['save_dir'], f"{orig_id}.{subtitle_locale}.srt") if subtitle_locale else '' 
         opts = {
             'writesubtitles': bool(need_subtitle), 
-            'subtitleslangs': [subtitle_map.get(need_subtitle, '')], 
+            'subtitleslangs': [subtitle_locale], 
             'writesubtitlesformat': 'srt' if need_subtitle else None, 
             'writethumbnail': True,     
             'outtmpl': save_path, 
             'format': f"bv*[height<={session['resolution']}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
-            'progress_hooks': [create_progress_hook(task_id)],
+            # 'progress_hooks': [create_progress_hook(task_id)],
         }
-        task_status[task_id] = {
-            'status': VideoStatus.DOWNLOADING, 
-            'progress': '', 
-            'id': orig_id,
-            'title': session['origin_title'],
-            'path': save_path
-        }
+        # task_status[task_id] = {
+        #     'status': VideoStatus.DOWNLOADING, 
+        #     'progress': '', 
+        #     'id': orig_id,
+        #     'title': session['origin_title'],
+        #     'path': save_path
+        # }
 
         db = VideoDB()
         video_id = db.create_video(
@@ -125,15 +136,24 @@ def download_controller(app, session):
             origin_id = orig_id,
             origin_url = video_url, 
             save_path = save_path, 
-            title = info["title"]
+            save_srt = save_srt,
+            title = info["title"],
+            subtitle_lang = need_subtitle
         )
         db.update_video(video_id, status=VideoStatus.DOWNLOADING)
 
         print('准备下载', task_id, '\n', opts)
         current_session = session._get_current_object()
-        thread = Thread(target=async_yt_dlp_in_thread, args=(current_session, video_url, opts, task_id, video_id))
-        # thread = Thread(target=run_yt_dlp, args=(current_session, video_url, opts, task_id, video_id))
-        thread.start()
+        # thread = Thread(target=async_yt_dlp_in_thread, args=(current_session, video_url, opts, task_id, video_id))
+        # thread.start()
+        with ThreadPoolExecutor() as executor:
+            future = executor.submit(yt_dlp_sync_wrapper, current_session, video_url, opts, task_id, video_id)
+            result = future.result()
+            is_succ, msg = result 
+            if is_succ:
+                return redirect(url_for(Route.LIST))
+            flash(msg, 'warning')
+            return redirect(url_for(Route.LOGIN))
 
         return redirect(url_for(Route.LIST))
         

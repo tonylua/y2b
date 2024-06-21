@@ -6,6 +6,7 @@ CREATE TABLE videos (
     created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     title TEXT NOT NULL,
     desc TEXT,
+    subtitle_lang TEXT,
     save_path TEXT NOT NULL,
     save_srt TEXT,
     save_cover TEXT,

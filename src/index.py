@@ -46,7 +46,7 @@ def login():
 @app.route('/download', methods=['GET', 'POST'])
 @login_required
 def download():
-    return download_controller(app, session)
+    return download_controller(session)
 
 @app.route('/delete/<video_id>', methods=['GET']) 
 def delete(video_id):
