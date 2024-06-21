@@ -17,10 +17,8 @@ def get_path(session, key):
 
 async def do_upload(session, video_id):
     db = VideoDB()
-
     # task = task_status[task_id]
     # title = task['title']
-     
     record = db.read_video(video_id)
     title = record['title']
     orig_id = session['origin_id']
@@ -33,6 +31,7 @@ async def do_upload(session, video_id):
         'en': '英字',
         'cn': '中字'
     }
+    subtitles_path = None
     if (need_subtitle):
         subtitles_path = get_path(session, session["save_srt_{need_subtitle}"])
         subtitles_exist = os.path.exists(subtitles_path)
@@ -82,7 +81,7 @@ async def do_upload(session, video_id):
     db_update_args = {
         "title": title,
         "save_cover": cover,
-        "save_srt": subtitles_path if need_subtitle else None
+        "save_srt": subtitles_path
     }
 
     if not session['auto_upload']:
@@ -92,7 +91,8 @@ async def do_upload(session, video_id):
         })
         print("not need auto_upload", db_update_args)
         db.update_video(video_id, **db_update_args)
-        return redirect(url_for(Route.LIST))
+        return True, None
+        # return redirect(url_for(Route.LIST))
 
     args = {
         "sessdata": session['SESSDATA'],
@@ -120,25 +120,32 @@ async def do_upload(session, video_id):
     uploader = video_uploader.VideoUploader([page], vu_meta, credential)
 
     @uploader.on("__ALL__")
-    async def ev(data):
+    async def ev(data, args = db_update_args):
         print('上传完成', data)
-        db_update_args += pick(vu_data, ["desc", "tid", "tags"])
-        db_update_args["status"] = VideoStatus.UPLOADED
-        db.update_video(video_id, **db_update_args)
+        args += pick(vu_data, ["desc", "tid", "tags"])
+        args["status"] = VideoStatus.UPLOADED
+        db.update_video(video_id, **args)
 
     print("开始上传...");
     try:
         db.update_video(video_id, status=VideoStatus.UPLOADING)
         await uploader.start()
     except bilibili_api.exceptions.NetworkException as e:
-        flash("bilibili_api 403，请尝试更新cookie信息", "warning")
-        return redirect(url_for(Route.LOGIN))
+        msg = "bilibili_api 403，请尝试更新cookie信息"
+        return False, msg
+        # flash(msg, "warning")
+        # return redirect(url_for(Route.LOGIN))
     except bilibili_api.exceptions.ResponseCodeException as e:
-        print(e)
-        flash("需要输入验证码了，请稍后再投稿", "warning")
-        return redirect(url_for(Route.LOGIN))
+        msg = "需要输入验证码了，请稍后再投稿"
+        return False, msg
+        # flash(msg, "warning")
+        # return redirect(url_for(Route.LOGIN))
+    return True, None
 
 async def upload_controller(session):
     video_id = request.form.get('video_id')
-    await do_upload(session, video_id)
+    is_succ, msg = await do_upload(session, video_id)
+    if not is_succ:
+        flash(msg, 'warning')
+        return redirect(url_for(Route.LOGIN))
     return redirect(url_for(Route.LIST))

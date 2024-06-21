@@ -1,16 +1,16 @@
 import os
 import uuid
 import asyncio
-from flask import Flask, request, redirect, url_for, render_template, copy_current_request_context 
 from threading import Thread
+from flask import Flask, request, redirect, url_for, render_template, flash 
 from yt_dlp import YoutubeDL
 from forms.download import YouTubeDownloadForm
-from .upload2 import do_upload
 from utils.string import clean_reship_url
 from utils.account import AccountUtil, get_youtube_info
 from utils.constants import Route, VideoStatus
 from utils.sys import join_root_path
 from utils.db import VideoDB
+from .upload2 import do_upload
 
 task_status = {}
 
@@ -33,7 +33,11 @@ async def run_yt_dlp(session, url, ydl_opts, task_id, video_id):
         ydl.download([url])
     task_status[task_id]['status'] = VideoStatus.DOWNLOADED
     # rename_completed_file(task_status[task_id]['path'])
-    await do_upload(session, video_id)
+    is_succ, msg = await do_upload(session, video_id)
+    if is_succ:
+        return redirect(url_for(Route.LIST))
+    flash(msg, 'warning')
+    return redirect(url_for(Route.LOGIN))
 
 def async_yt_dlp_in_thread(*args):
     loop = asyncio.new_event_loop()
