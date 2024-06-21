@@ -15,5 +15,5 @@ CREATE TABLE videos (
     size INTEGER,
     tid INTEGER,
     tags TEXT,
-    status TEXT CHECK(status IN ('pending', 'downloading', 'downloaded', 'uploading', 'uploaded')) DEFAULT 'pending'
+    status TEXT CHECK(status IN ('pending', 'downloading', 'downloaded', 'uploading', 'uploaded', 'error')) DEFAULT 'pending'
 );

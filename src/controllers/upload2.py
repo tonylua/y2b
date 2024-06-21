@@ -124,13 +124,12 @@ async def do_upload(session, video_id):
 
     @uploader.on("__ALL__")
     async def ev(data, args = db_update_args):
-        print(55566, data.name, data.name == VideoUploaderEvents.COMPLETED)
-        if data.name == VideoUploaderEvents.COMPLETED:
+        if data['name'] == VideoUploaderEvents.COMPLETED.value:
             args += pick(vu_data, ["desc", "tid", "tags"])
             args["status"] = VideoStatus.UPLOADED
             db.update_video(video_id, **args)
             print('上传完成', data)
-        if data.name == VideoUploaderEvents.FAILED:
+        if data['name'] == VideoUploaderEvents.FAILED.value:
             args["status"] = VideoStatus.ERROR
             db.update_video(video_id, **args)
             print('上传失败', data)

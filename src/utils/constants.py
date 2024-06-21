@@ -7,6 +7,7 @@ class Route(str, Enum):
     PREVIEW = 'preview'
     UPLOAD = 'upload'
 
+# 注意和 schema.sql 的同步
 class VideoStatus(str, Enum):
     PENDING = 'pending'
     DOWNLOADING = 'downloading'

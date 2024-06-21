@@ -22,7 +22,7 @@
             <td>{{ video.created }}</td>
             <td>{{ video.status }}</td>
             <td>
-                {% if video.status == VideoStatus.DOWNLOADED %}
+                {% if video.status == VideoStatus.DOWNLOADED or video.status == VideoStatus.UPLOADING %}
                 <form action="{{ url_for('upload') }}" method="post">
                   <input name="video_id" type="hidden" value="{{video.id}}" />
                   <button type="submit" class="btn btn-primary">upload</button>
