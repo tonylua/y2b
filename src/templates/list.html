@@ -10,6 +10,7 @@
             <th scope="col">Title</th>
             <th scope="col">ID</th>
             <th scope="col">Time</th>
+            <th scope="col">Subtitle</th>
             <th scope="col">Status</th>
             <th scope="col">Operations</th>
         </tr>
@@ -20,6 +21,7 @@
             <td><a href="{{ video.save_path }}">{{ video.title }}</a></td>
             <td>{{ video.origin_id }}</td>
             <td>{{ video.created }}</td>
+            <td>{{ video.subtitle_lang }}</td>
             <td>{{ video.status }}</td>
             <td>
                 {% if video.status == VideoStatus.DOWNLOADED or video.status == VideoStatus.UPLOADING %}
