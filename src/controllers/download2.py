@@ -1,7 +1,7 @@
 import os
-import uuid
+# import uuid
 import asyncio
-from threading import Thread
+# from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, redirect, url_for, render_template, flash 
 from yt_dlp import YoutubeDL
@@ -27,7 +27,7 @@ from .upload2 import do_upload
 #             task_status[task_id]['progress'] = 'ERR'
 #     return hook
 
-async def run_yt_dlp(session, url, ydl_opts, task_id, video_id):
+async def run_yt_dlp(session, url, video_id, ydl_opts):
     with YoutubeDL(ydl_opts) as ydl:
         print("开始下载...", video_id)
         ydl.download([url])
@@ -35,19 +35,20 @@ async def run_yt_dlp(session, url, ydl_opts, task_id, video_id):
     result = await do_upload(session, video_id)
     return result
 
-async def yt_dlp_worker(*args):
+async def yt_dlp_worker(session, url, video_id, ydl_opts):
     try:
-        return await run_yt_dlp(*args)
+        return await run_yt_dlp(session, url, video_id, ydl_opts)
     except Exception as e:
-        video_id = args[2]
+        if isinstance(e, AttributeError):
+            e = str(e)
         print('async_yt_dlp_in_thread ERR', e, video_id)
         db = VideoDB()
         db.update_video(video_id, status=VideoStatus.ERROR)
         return False, e
 
-def yt_dlp_sync_wrapper(*args):
+def yt_dlp_sync_wrapper(session, url, video_id, ydl_opts):
     """同步包装器，用于在非异步上下文中运行异步函数"""
-    return asyncio.run(yt_dlp_worker(*args))
+    return asyncio.run(yt_dlp_worker(session, url, video_id, ydl_opts))
 
 # def async_yt_dlp_in_thread(*args):
 #     loop = asyncio.new_event_loop()
@@ -107,10 +108,7 @@ def download_controller(session):
         session['tid'] = request.form.get('tid')
         session['tags'] = request.form.get('tags')
 
-        task_id = str(uuid.uuid4())
         session['save_video'] = f"{orig_id}.{session['resolution']}.mp4"
-        # session['save_srt_en'] = f"{orig_id}.en.srt"
-        # session['save_srt_cn'] = f"{orig_id}.zh-Hans.srt"
         save_path = os.path.join(session['save_dir'], session['save_video'])
         save_srt = os.path.join(session['save_dir'], f"{orig_id}.{subtitle_locale}.srt") if subtitle_locale else '' 
         opts = {
@@ -142,12 +140,12 @@ def download_controller(session):
         )
         db.update_video(video_id, status=VideoStatus.DOWNLOADING)
 
-        print('准备下载', task_id, '\n', opts)
+        print('准备下载', video_id, '\n', opts)
         current_session = session._get_current_object()
         # thread = Thread(target=async_yt_dlp_in_thread, args=(current_session, video_url, opts, task_id, video_id))
         # thread.start()
         with ThreadPoolExecutor() as executor:
-            future = executor.submit(yt_dlp_sync_wrapper, current_session, video_url, opts, task_id, video_id)
+            future = executor.submit(yt_dlp_sync_wrapper, current_session, video_url, video_id, opts)
             result = future.result()
             is_succ, msg = result 
             if is_succ:
