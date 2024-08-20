@@ -30,18 +30,22 @@ from .upload2 import do_upload
 async def run_yt_dlp(session, url, video_id, ydl_opts):
     with YoutubeDL(ydl_opts) as ydl:
         print("开始下载...", video_id)
-        ydl.download([url])
+        try:
+            ydl.download([url])
+        except AttributeError as e:
+            print('=== ERR ===', e, video_id)
+            raise e
     # task_status[task_id]['status'] = VideoStatus.DOWNLOADED
     result = await do_upload(session, video_id)
-    return result
+    return True, result
 
 async def yt_dlp_worker(session, url, video_id, ydl_opts):
     try:
         return await run_yt_dlp(session, url, video_id, ydl_opts)
     except Exception as e:
+        print('async_yt_dlp_in_thread ERR', e, video_id)
         if isinstance(e, AttributeError):
             e = str(e)
-        print('async_yt_dlp_in_thread ERR', e, video_id)
         db = VideoDB()
         db.update_video(video_id, status=VideoStatus.ERROR)
         return False, e
@@ -153,6 +157,6 @@ def download_controller(session):
             flash(msg, 'warning')
             return redirect(url_for(Route.LOGIN))
 
-        return redirect(url_for(Route.LIST))
+        # return redirect(url_for(Route.LIST))
         
     return render_template('download2.html', form=form)
