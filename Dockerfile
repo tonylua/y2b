@@ -23,17 +23,20 @@ RUN apt install -y --fix-missing ffmpeg
 RUN apt-get update --allow-releaseinfo-change
 RUN apt-get install -y ffmpeg
 RUN apt-get install -y fonts-arphic-ukai fonts-arphic-uming
+RUN apt-get install -y git
 RUN apt-get install -y vim
 
 ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv $VIRTUAL_ENV
+RUN python -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 COPY requirements.txt .
 RUN pip config set global.index-url http://mirrors.aliyun.com/pypi/simple/
 RUN pip config set install.trusted-host mirrors.aliyun.com
-RUN pip install -r requirements.txt
 RUN pip install flask[async]
+RUN pip install -r requirements.txt
+# RUN pip install bilibili-api-python==16.2.0
+RUN pip install git+https://github.com/Nemo2011/bilibili-api.git#main
 
 COPY . /app
 RUN python db/init_db.py

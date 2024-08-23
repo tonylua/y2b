@@ -1,9 +1,10 @@
 import os
+import traceback
 # import uuid
 import asyncio
 # from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, request, redirect, url_for, render_template, flash 
+from flask import Flask, request, redirect, url_for, render_template, flash, jsonify
 from yt_dlp import YoutubeDL
 from forms.download import YouTubeDownloadForm
 from utils.string import clean_reship_url
@@ -43,16 +44,17 @@ async def yt_dlp_worker(session, url, video_id, ydl_opts):
     try:
         return await run_yt_dlp(session, url, video_id, ydl_opts)
     except Exception as e:
+        traceback.print_exc()
         print('async_yt_dlp_in_thread ERR', e, video_id)
-        if isinstance(e, AttributeError):
-            e = str(e)
+        # if isinstance(e, AttributeError):
+        #     e = jsonify(e)
         db = VideoDB()
         db.update_video(video_id, status=VideoStatus.ERROR)
         return False, e
 
-def yt_dlp_sync_wrapper(session, url, video_id, ydl_opts):
+def yt_dlp_sync_wrapper(*args):
     """同步包装器，用于在非异步上下文中运行异步函数"""
-    return asyncio.run(yt_dlp_worker(session, url, video_id, ydl_opts))
+    return asyncio.run(yt_dlp_worker(*args))
 
 # def async_yt_dlp_in_thread(*args):
 #     loop = asyncio.new_event_loop()
@@ -149,12 +151,18 @@ def download_controller(session):
         # thread = Thread(target=async_yt_dlp_in_thread, args=(current_session, video_url, opts, task_id, video_id))
         # thread.start()
         with ThreadPoolExecutor() as executor:
-            future = executor.submit(yt_dlp_sync_wrapper, current_session, video_url, video_id, opts)
+            future = executor.submit(
+                yt_dlp_sync_wrapper, 
+                current_session, 
+                video_url, 
+                video_id, 
+                opts
+            )
             result = future.result()
             is_succ, msg = result 
             if is_succ:
                 return redirect(url_for(Route.LIST))
-            flash(msg, 'warning')
+            flash(f"An error occurred: {msg}", 'warning')
             return redirect(url_for(Route.LOGIN))
 
         # return redirect(url_for(Route.LIST))

@@ -25,6 +25,8 @@ async def do_upload(session, video_id):
     origin_video_path = record['save_path'] 
     video_path = origin_video_path
 
+    print(f"准备上传 {video_id} {title}")
+
     # TODO srt字幕直接上传 https://github.com/Nemo2011/bilibili-api/issues/748
     need_subtitle = record['subtitle_lang']
     subtitle_title_map = {
