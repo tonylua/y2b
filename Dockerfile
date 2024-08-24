@@ -1,30 +1,30 @@
 # FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.9-slim
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.11-slim
+# FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.11-slim
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-alpine-linuxarm64
 
-ADD sources.list /etc/apt/
+# ADD sources.list /etc/apt/
 
 WORKDIR /app
 
 USER root
 
-RUN echo "deb https://mirrors.huaweicloud.com/debian bullseye main contrib" >>/etc/apt/sources.list
-RUN echo "deb https://mirrors.huaweicloud.com/debian-security bullseye-security main contrib" >>/etc/apt/sources.list
-RUN echo "deb https://mirrors.huaweicloud.com/debian bullseye-updates main contrib" >>/etc/apt/sources.list
-RUN echo "deb https://mirrors.huaweicloud.com/debian/ bookworm main non-free non-free-firmware contrib" >>/etc/apt/sources.list
-RUN echo "deb-src https://mirrors.huaweicloud.com/debian/ bookworm main non-free non-free-firmware contrib" >>/etc/apt/sources.list
-RUN echo "deb https://mirrors.huaweicloud.com/debian-security/ bookworm-security main" >>/etc/apt/sources.list
-RUN echo "deb-src https://mirrors.huaweicloud.com/debian-security/ bookworm-security main" >>/etc/apt/sources.list
-RUN echo "deb https://mirrors.huaweicloud.com/debian/ bookworm-updates main non-free non-free-firmware contrib" >>/etc/apt/sources.list
-RUN echo "deb-src https://mirrors.huaweicloud.com/debian/ bookworm-updates main non-free non-free-firmware contrib" >>/etc/apt/sources.list
-RUN echo "deb https://mirrors.huaweicloud.com/debian/ bookworm-backports main non-free non-free-firmware contrib" >>/etc/apt/sources.list
-RUN echo "deb-src https://mirrors.huaweicloud.com/debian/ bookworm-backports main non-free non-free-firmware contrib" >>/etc/apt/sources.list
-RUN apt -y update
-RUN apt install -y --fix-missing ffmpeg
-RUN apt-get update --allow-releaseinfo-change
-RUN apt-get install -y ffmpeg
-RUN apt-get install -y fonts-arphic-ukai fonts-arphic-uming
-RUN apt-get install -y git
-RUN apt-get install -y vim
+# RUN echo "deb https://mirrors.huaweicloud.com/debian bullseye main contrib" >>/etc/apt/sources.list
+# RUN echo "deb https://mirrors.huaweicloud.com/debian-security bullseye-security main contrib" >>/etc/apt/sources.list
+# RUN echo "deb https://mirrors.huaweicloud.com/debian bullseye-updates main contrib" >>/etc/apt/sources.list
+# RUN echo "deb https://mirrors.huaweicloud.com/debian/ bookworm main non-free non-free-firmware contrib" >>/etc/apt/sources.list
+# RUN echo "deb-src https://mirrors.huaweicloud.com/debian/ bookworm main non-free non-free-firmware contrib" >>/etc/apt/sources.list
+# RUN echo "deb https://mirrors.huaweicloud.com/debian-security/ bookworm-security main" >>/etc/apt/sources.list
+# RUN echo "deb-src https://mirrors.huaweicloud.com/debian-security/ bookworm-security main" >>/etc/apt/sources.list
+# RUN echo "deb https://mirrors.huaweicloud.com/debian/ bookworm-updates main non-free non-free-firmware contrib" >>/etc/apt/sources.list
+# RUN echo "deb-src https://mirrors.huaweicloud.com/debian/ bookworm-updates main non-free non-free-firmware contrib" >>/etc/apt/sources.list
+# RUN echo "deb https://mirrors.huaweicloud.com/debian/ bookworm-backports main non-free non-free-firmware contrib" >>/etc/apt/sources.list
+# RUN echo "deb-src https://mirrors.huaweicloud.com/debian/ bookworm-backports main non-free non-free-firmware contrib" >>/etc/apt/sources.list
+
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+RUN apk add --no-cache --update-cache ffmpeg
+RUN apk add --no-cache --update-cache git
+RUN apk add --no-cache --update-cache vim
+RUN apk add --update ttf-dejavu fontconfig && rm -rf /var/cache/apk/* && mkfontscale && mkfontdir && fc-cache
 
 ENV VIRTUAL_ENV=/opt/venv
 RUN python -m venv $VIRTUAL_ENV

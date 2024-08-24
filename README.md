@@ -32,4 +32,14 @@ python cli_to_api.py --extractor-arg "youtube:player_client=ios"
 
 "registry-mirrors": ["https://docker.mirrors.ustc.edu.cn"]
 docker build -t flask-y2b .
-docker run -p 5000:5000 -d flask-y2b
+docker run --rm -p 5000:5000 -d flask-y2b
+docker stats <containerId> # 查看运行状态
+docker logs -f <containerId> # 查看实时运行输出
+
+### Dockerfile 不是 utf-8 引起 exec /bin/sh: exec format error
+
+```
+file Dockerfile # 输出 Dockerfile: ASCII text 的话
+iconv -f ASCII -t UTF-8 Dockerfile > Dockerfile.utf8
+mv Dockerfile.utf8 Dockerfile
+```

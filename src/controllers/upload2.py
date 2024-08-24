@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 from flask import Flask, request, redirect, url_for, flash
 import bilibili_api
@@ -24,6 +25,9 @@ async def do_upload(session, video_id):
     orig_id = record['origin_id']
     origin_video_path = record['save_path'] 
     video_path = origin_video_path
+
+    architecture = platform.machine()
+    runInPI = architecture in ['aarch64', 'arm64']
 
     print(f"准备上传 {video_id} {title}")
 
@@ -64,7 +68,8 @@ async def do_upload(session, video_id):
                 video_path
             ]
             if (need_subtitle == 'cn'):
-                ff_args = ff_args[:3] + [f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"] + ff_args[4:]
+                zh_font = 'DejaVu Sans' if runInPI else 'AR PL UKai CN'
+                ff_args = ff_args[:3] + [f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName={zh_font}'"] + ff_args[4:]
             print("加字幕...", title, subtitles_path, ff_args)
             try:
                 run_cli_command('ffmpeg', ff_args)
