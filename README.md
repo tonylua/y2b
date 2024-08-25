@@ -14,7 +14,7 @@
 
 ```
 docker build -t flask-y2b .
-docker run --rm --net host -p 5000:5000 -d flask-y2b
+docker run --rm --net host --restart always -p 5000:5000 -d flask-y2b
 docker stats <containerId> # 查看运行状态
 docker logs -f <containerId> # 查看实时运行输出
 ```
