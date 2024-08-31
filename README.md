@@ -13,8 +13,8 @@
 ```
 
 ```
-docker build -t flask-y2b .
-docker run --rm --net host -p 5000:5000 -d flask-y2b # --restart always 和 --rm 选其一
+docker build --network=host -t flask-y2b:<VERSION> .                    # -f Dockerfile-amd64 非pi时
+docker run --rm --net host -p 5000:5000 -d flask-y2b:<VERSION>          # --restart always 和 --rm 选其一
 docker stats <containerId> # 查看运行状态
 docker logs -f <containerId> # 查看实时运行输出
 ```
