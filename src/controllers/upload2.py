@@ -27,7 +27,7 @@ async def do_upload(session, video_id):
     video_path = origin_video_path
 
     architecture = platform.machine()
-    runInPI = architecture in ['aarch64', 'arm64']
+    # runInPI = architecture in ['aarch64', 'arm64']
 
     print(f"准备上传 {video_id} {title}")
 
@@ -68,8 +68,8 @@ async def do_upload(session, video_id):
                 video_path
             ]
             if (need_subtitle == 'cn'):
-                zh_font = 'DejaVu Sans' if runInPI else 'AR PL UKai CN'
-                ff_args = ff_args[:3] + [f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName={zh_font}'"] + ff_args[4:]
+                font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"
+                ff_args = ff_args[:3] + [font_args] + ff_args[4:]
             print("加字幕...", title, subtitles_path, ff_args)
             try:
                 run_cli_command('ffmpeg', ff_args)

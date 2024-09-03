@@ -8,7 +8,9 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 RUN apk add --no-cache --update-cache ffmpeg
 RUN apk add --no-cache --update-cache git
 RUN apk add --no-cache --update-cache vim
-RUN apk add --update ttf-dejavu fontconfig && rm -rf /var/cache/apk/* && mkfontscale && mkfontdir && fc-cache
+RUN mkdir -p /usr/share/fonts/ukai
+# https://github.com/SilentByte/fonts-arphic-ukai/raw/master/fonts-arphic-ukai/ukai.ttc
+ADD ./static/ukai.ttc /usr/share/fonts/ukai/
 
 ENV VIRTUAL_ENV=/opt/venv
 RUN python -m venv $VIRTUAL_ENV
@@ -20,7 +22,8 @@ RUN pip install flask[async]
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-RUN pip install git+https://github.com/Nemo2011/bilibili-api.git#main
+# RUN pip install git+https://github.com/Nemo2011/bilibili-api.git#main
+RUN pip install git+https://gitee.com/nemo2011/bilibili-api.git#main
 
 COPY . /app
 RUN python db/init_db.py
