@@ -30,12 +30,10 @@
             <td>{{ video.subtitle_lang }}</td>
             <td>{{ video.status }}</td>
             <td>
-                <!--{% if video.status == VideoStatus.DOWNLOADED or video.status == VideoStatus.UPLOADING %}-->
                 <form action="{{ url_for('upload') }}" method="post">
                   <input name="video_id" type="hidden" value="{{video.id}}" />
                   <button type="submit" class="btn btn-primary">upload</button>
                 </form>
-                <!--{% endif %}-->
                 <form action="{{ url_for('delete', video_id=video.id) }}" method="get">
                   <button type="submit" class="btn btn-secondary">delete</button>
                 </form>
