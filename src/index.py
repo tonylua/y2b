@@ -13,7 +13,11 @@ from controllers.list import list_controller
 current_file_path = os.path.abspath(__file__)
 current_dir = os.path.dirname(current_file_path)
 
-app = Flask(__name__, template_folder=f'{current_dir}/templates')
+app = Flask(__name__, 
+    template_folder=f'{current_dir}/templates', 
+    static_folder=f'{current_dir}/../static',
+    static_url_path='/static'
+)
 app.config['SECRET_KEY'] = secrets.token_urlsafe(32) 
 app.config['SESSION_TYPE'] = 'filesystem'
 

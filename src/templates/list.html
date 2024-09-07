@@ -18,18 +18,24 @@
     <tbody>
         {% for video in videos %}
         <tr>
-            <td><a href="{{ video.save_path }}">{{ video.title }}</a></td>
+            <td>
+                <video width="320" height="240" controls poster="{{ video.save_path.replace('/app/static/', url_for('static', filename='', _external=True)).replace('.mp4', '.webp') }}">
+                    <source src="{{ video.save_path.replace('/app/static/', url_for('static', filename='', _external=True)).replace('.mp4', '.with_srt.mp4') }}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <h6>{{ video.title }}</h6>
+            </td>
             <td>{{ video.origin_id }}</td>
             <td>{{ video.created }}</td>
             <td>{{ video.subtitle_lang }}</td>
             <td>{{ video.status }}</td>
             <td>
-                {% if video.status == VideoStatus.DOWNLOADED or video.status == VideoStatus.UPLOADING %}
+                <!--{% if video.status == VideoStatus.DOWNLOADED or video.status == VideoStatus.UPLOADING %}-->
                 <form action="{{ url_for('upload') }}" method="post">
                   <input name="video_id" type="hidden" value="{{video.id}}" />
                   <button type="submit" class="btn btn-primary">upload</button>
                 </form>
-                {% endif %}
+                <!--{% endif %}-->
                 <form action="{{ url_for('delete', video_id=video.id) }}" method="get">
                   <button type="submit" class="btn btn-secondary">delete</button>
                 </form>
