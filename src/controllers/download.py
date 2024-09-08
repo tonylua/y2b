@@ -69,7 +69,7 @@ def yt_dlp_sync_wrapper(*args):
 #     finally:
 #         loop.close() 
 
-def download_controller(session):
+def download_controller(session, url):
     user = session['login_name']
 
     try:
@@ -82,7 +82,8 @@ def download_controller(session):
     args = {
         "sessdata": bili_cookies['SESSDATA'],
         "bili_jct": bili_cookies['bili_jct'],
-        "buvid3": bili_cookies['buvid3']
+        "buvid3": bili_cookies['buvid3'],
+        "video_url": url
     }
     form = YouTubeDownloadForm(**args)
 

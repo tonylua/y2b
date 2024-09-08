@@ -50,7 +50,8 @@ def login():
 @app.route('/download', methods=['GET', 'POST'])
 @login_required
 def download():
-    return download_controller(session)
+    url = request.args.get('url', default=None, type=str)
+    return download_controller(session, url)
 
 @app.route('/delete/<video_id>', methods=['GET']) 
 def delete(video_id):
