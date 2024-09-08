@@ -58,7 +58,7 @@ async def do_upload(session, video_id):
         if (subtitles_exist):
             video_path = add_suffix_to_filename(video_path, 'with_srt') 
             title_prefix = subtitle_title_map.get(need_subtitle, '转')
-            title = f"[{title_prefix}] {title.replace(title_prefix, '')}"
+            title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
             
             ff_args = [
                 "-i", origin_video_path,
