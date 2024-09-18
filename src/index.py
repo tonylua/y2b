@@ -9,6 +9,7 @@ from controllers.download import download_controller
 from controllers.upload import upload_controller
 from controllers.delete import delete_controller
 from controllers.list import list_controller
+from controllers.pending import fetch_pending_list
 
 current_file_path = os.path.abspath(__file__)
 current_dir = os.path.dirname(current_file_path)
@@ -57,18 +58,9 @@ def download():
 def delete(video_id):
     return delete_controller(session, video_id)
 
-# @app.route('/download_video', methods=['POST'])
-# def download_ajax():
-#     return download_video_ajax(session)
-
-# @app.route('/download_status/<task_id>', methods=['GET'])
-# def download_status(task_id):
-#     return download_status_ajax(task_id)
-
-# @app.route('/preview', methods=['GET', 'POST'])
-# @login_required
-# def preview():
-#     return preview_controller(session)
+@app.route('/fetch_pending_list', methods=['GET'])
+def fetch_pending():
+    return fetch_pending_list()
 
 @app.route('/upload', methods=['POST']) 
 async def upload():

@@ -38,4 +38,37 @@
         {% endfor %}
     </form>
 </div>
+<ul id="pending_list">
+</ul>
+{% endblock %}
+
+{% block footer %}
+<script>
+$(document).ready(function() {
+    $.ajax({
+        url: '{{ url_for("fetch_pending") }}',
+        type: 'GET',
+        dataType: 'json',
+        success: function(data) {
+            var list = $('#pending_list');
+            list.empty(); // 清空列表
+
+            $.each(data, function(index, video) {
+                var listItem = $('<li>')
+                    .text(video.title)
+                    .data('video', video) 
+                    .appendTo(list);
+            });
+
+            list.on('click', 'li', function() {
+                var video = $(this).data('video');
+                location.href = `/download?url=${video.url}`;
+            });
+        },
+        error: function(error) {
+            console.error('Error fetching playlist:', error);
+        }
+    });
+});
+</script>
 {% endblock %}
