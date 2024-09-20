@@ -28,5 +28,7 @@ RUN pip install git+https://gitee.com/nemo2011/bilibili-api.git#main
 COPY . /app
 RUN python db/init_db.py
 
-EXPOSE 5000
-CMD ["python", "src/index.py"]
+ARG PORT=5000
+ENV PORT=${PORT}
+EXPOSE ${PORT}
+ENTRYPOINT ["sh", "-c", "python src/index.py --port $PORT"]

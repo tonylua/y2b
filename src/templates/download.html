@@ -55,14 +55,14 @@ $(document).ready(function() {
 
             $.each(data, function(index, video) {
                 var listItem = $('<li>')
-                    .text(video.title)
+                    .text(`${video.title} / ${video.duration}`)
                     .data('video', video) 
                     .appendTo(list);
             });
 
             list.on('click', 'li', function() {
                 var video = $(this).data('video');
-                location.href = `/download?url=${video.url}`;
+                $('#video_url').val(video.url || `https://www.youtube.com/watch?v=${video.id}`);
             });
         },
         error: function(error) {

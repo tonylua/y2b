@@ -17,7 +17,7 @@
 docker build --network=host -t flask-y2b:<VERSION> .                    
 
 # --restart always 和 --rm 选其一
-docker run --restart always --net host -p 5000:5000 -v /root/move_video/static:/app/static -v /root/move_video/config:/app/config -v /root/move_video/db:/app/db -d flask-y2b:<VERSION>
+docker run --restart always --net host -p 5000:5000 -e PORT=5000 -v /root/move_video/static:/app/static -v /root/move_video/config:/app/config -v /root/move_video/db:/app/db -d flask-y2b:<VERSION>
 
 # 查看运行状态
 docker stats <containerId> 

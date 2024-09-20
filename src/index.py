@@ -1,4 +1,5 @@
 import os
+import argparse
 import secrets
 from functools import wraps
 from flask import Flask, g, session, request, flash, redirect, url_for  
@@ -10,6 +11,10 @@ from controllers.upload import upload_controller
 from controllers.delete import delete_controller
 from controllers.list import list_controller
 from controllers.pending import fetch_pending_list
+
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('--port', type=int, help='flask port', default=5000)
+args = arg_parser.parse_args()
 
 current_file_path = os.path.abspath(__file__)
 current_dir = os.path.dirname(current_file_path)
@@ -72,4 +77,4 @@ def list_page():
     return list_controller(session)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', port=args.port)
