@@ -3,3 +3,4 @@ db/*.db
 __pycache__
 config/*.json
 *venv/
+.session.vim

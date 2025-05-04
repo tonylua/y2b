@@ -1,0 +1,17 @@
+[project]
+name = "y2b"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "bilibili-api-python",
+    "flask-wtf==1.2.1",
+    "requests==2.32.2",
+    "wtforms==3.1.2",
+    "youtube-transcript-api==0.6.2",
+    "yt-dlp==2024.12.23",
+]
+
+[tool.uv.sources]
+bilibili-api-python = { git = "https://github.com/Nemo2011/bilibili-api.git" }
