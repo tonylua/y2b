@@ -69,7 +69,8 @@ async def do_upload(session, video_id):
                 video_path
             ]
             if (need_subtitle == 'cn'):
-                font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"
+                font_file = join_root_path('static/ukai.ttc')
+                font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN,FontFile={font_file}'"
                 ff_args = ff_args[:3] + [font_args] + ff_args[4:]
             print("加字幕...", title, subtitles_path, ff_args)
             try:
