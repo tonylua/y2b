@@ -18,6 +18,51 @@ from utils.account import AccountUtil
 def get_path(session, key):
     return f"{session['save_dir']}/{key}"
 
+def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> bool:
+    """下载字幕并保存为 SRT 文件，返回是否成功"""
+    try:
+        languages = ['en']
+        if need_subtitle == 'cn':
+            languages = ['zh-Hans', 'zh-CN', 'en']
+        # 方案1：使用 youtube-transcript-api
+        transcript = YouTubeTranscriptApi.get_transcript(
+            video_id, 
+            languages=languages
+        )
+        srt_content = SRTFormatter().format_transcript(transcript)
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(srt_content)
+        return True
+        
+    except Exception as e:
+        print(f"API 方式失败: {e}")
+        languages = ['en']
+        if need_subtitle == 'cn':
+            languages = ['zh', 'en']
+        try:
+            # 方案2：回退到 yt-dlp
+            ydl_opts = {
+                'writesubtitles': True,
+                'subtitlesformat': 'srt',
+                'subtitleslangs': languages,
+                'skip_download': True,
+                'quiet': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([f'https://youtu.be/{video_id}'])
+            
+            # 尝试找到下载的字幕文件
+            for lang in languages:
+                srt_file = f"{video_id}.{lang}.srt"
+                if os.path.exists(srt_file):
+                    os.rename(srt_file, save_path)
+                    return True
+                    
+            return False
+        except Exception as e:
+            print(f"yt-dlp 方式失败: {e}")
+            return False
+
 async def do_upload(session, video_id):
     db = VideoDB()
     record = db.read_video(video_id)
@@ -45,19 +90,23 @@ async def do_upload(session, video_id):
         if subtitles_path and not subtitles_exist:
             print(f"尝试补充字幕 {orig_id} {title}")
             transcript_list = YouTubeTranscriptApi.list_transcripts(orig_id)
-            transcript = transcript_list.find_transcript(['en'])
-            if need_subtitle == 'cn':
-                transcript = transcript.translate('zh-Hans')
-            formatter = SRTFormatter()
-            srt_formatted = formatter.format_transcript(transcript.fetch())
-            with open(subtitles_path, 'w', encoding='utf-8') as srt_file:
-                srt_file.write(srt_formatted)
+
+            # transcript = transcript_list.find_transcript(['en'])
+            # if need_subtitle == 'cn':
+            #     transcript = transcript.translate('zh-Hans')
+            #
+            # formatter = SRTFormatter()
+            # srt_formatted = formatter.format_transcript(transcript.fetch())
+            # with open(subtitles_path, 'w', encoding='utf-8') as srt_file:
+            #     srt_file.write(srt_formatted)
+            has_subtitle = download_subtitles(orig_id, subtitles_path, need_subtitle)
+
             print(f"补充了字幕 {subtitles_path}")
             subtitles_exist = os.path.exists(subtitles_path)
 
         if (subtitles_exist):
             video_path = add_suffix_to_filename(video_path, 'with_srt') 
-            title_prefix = subtitle_title_map.get(need_subtitle, '转')
+            title_prefix = subtitle_title_map.get(need_subtitle, '转') if has_subtitle else '转'
             title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
             
             ff_args = [
@@ -70,6 +119,7 @@ async def do_upload(session, video_id):
             ]
             if (need_subtitle == 'cn'):
                 font_file = join_root_path('static/ukai.ttc')
+                # font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"
                 font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN,FontFile={font_file}'"
                 ff_args = ff_args[:3] + [font_args] + ff_args[4:]
             print("加字幕...", title, subtitles_path, ff_args)

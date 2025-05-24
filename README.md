@@ -7,6 +7,14 @@
 - python db/init_db.py
 - python src/index.py
 
+### update
+
+- uv pip install 'yt-dlp==v2025.05.22'
+
+### fonts(win)
+
+- winget install "FFmpeg (Essentials Build)"
+
 ## Docker
 
 ```
@@ -61,4 +69,3 @@ SELECT * FROM videos;
 ## 转换参数
 python cli_to_api.py --extractor-arg "youtube:player_client=ios"
 </del>
-

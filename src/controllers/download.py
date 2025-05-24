@@ -45,7 +45,7 @@ async def yt_dlp_worker(session, url, video_id, ydl_opts):
         return await run_yt_dlp(session, url, video_id, ydl_opts)
     except Exception as e:
         traceback.print_exc()
-        print('async_yt_dlp_in_thread ERR', e, video_id)
+        print('run_yt_dlp ERR', e, video_id)
         # if isinstance(e, AttributeError):
         #     e = jsonify(e)
         db = VideoDB()
