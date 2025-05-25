@@ -1,8 +1,10 @@
 import os
+import sys
 import platform
 import subprocess
 from flask import Flask, request, redirect, url_for, flash
 import bilibili_api
+import yt_dlp
 from bilibili_api import video_uploader, Credential
 from bilibili_api.video_uploader import VideoUploaderEvents
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -105,25 +107,26 @@ async def do_upload(session, video_id):
             subtitles_exist = os.path.exists(subtitles_path)
 
         if (subtitles_exist):
-            video_path = add_suffix_to_filename(video_path, 'with_srt') 
-            title_prefix = subtitle_title_map.get(need_subtitle, '转') if has_subtitle else '转'
-            title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
-            
-            ff_args = [
-                "-i", origin_video_path,
-                "-vf",
-                f"subtitles={subtitles_path}",
-                "-c:a",
-                "copy",
-                video_path
-            ]
-            if (need_subtitle == 'cn'):
-                font_file = join_root_path('static/ukai.ttc')
-                # font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"
-                font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN,FontFile={font_file}'"
-                ff_args = ff_args[:3] + [font_args] + ff_args[4:]
-            print("加字幕...", title, subtitles_path, ff_args)
             try:
+                video_path = add_suffix_to_filename(video_path, 'with_srt') 
+                title_prefix = subtitle_title_map.get(need_subtitle, '转') if has_subtitle else '转'
+                title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
+                
+                ff_args = [
+                    "-i", origin_video_path,
+                    "-vf",
+                    f"subtitles={subtitles_path}",
+                    "-c:a",
+                    "copy",
+                    video_path
+                ]
+                if (need_subtitle == 'cn'):
+                    # font_file = join_root_path('static/ukai.ttc')
+                    # font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN,FontFile={font_file}'"
+                    font_name = "" if sys.platform == 'win32' else ":force_style='FontName=AR PL UKai CN"
+                    font_args = f"colorspace=bt709,subtitles={subtitles_path}{font_name}'"
+                    ff_args = ff_args[:3] + [font_args] + ff_args[4:]
+                print("加字幕...", title, subtitles_path, ff_args)
                 run_cli_command('ffmpeg', ff_args)
             except (Exception, subprocess.CalledProcessError) as e:
                 print('ffmpeg 加字幕过程报错', e)

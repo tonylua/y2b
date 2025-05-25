@@ -29,13 +29,17 @@ from .upload import do_upload
 #     return hook
 
 async def run_yt_dlp(session, url, video_id, ydl_opts):
-    with YoutubeDL(ydl_opts) as ydl:
-        print("开始下载...", video_id)
-        try:
-            ydl.download([url])
-        except AttributeError as e:
-            print('=== ERR ===', e, video_id)
-            raise e
+    save_path = os.path.join(session['save_dir'], session['save_video'])
+    if (os.path.exists(save_path)):
+        print("文件已存在")
+    else:
+        with YoutubeDL(ydl_opts) as ydl:
+            print("开始下载...", video_id)
+            try:
+                ydl.download([url])
+            except AttributeError as e:
+                print('=== ERR ===', e, video_id)
+                raise e
     # task_status[task_id]['status'] = VideoStatus.DOWNLOADED
     result = await do_upload(session, video_id)
     return True, result
