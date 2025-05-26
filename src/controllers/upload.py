@@ -9,7 +9,7 @@ from bilibili_api import video_uploader, Credential
 from bilibili_api.video_uploader import VideoUploaderEvents
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import SRTFormatter
-from utils.string import cleaned_text, truncate_str, add_suffix_to_filename
+from utils.string import cleaned_text, truncate_str, add_suffix_to_filename, abs_to_rel
 from utils.constants import Route, VideoStatus
 from utils.sys import run_cli_command, find_cover_images, join_root_path
 from utils.dict import pick
@@ -88,44 +88,51 @@ async def do_upload(session, video_id):
     if (need_subtitle):
         subtitles_path = record['save_srt'] 
         subtitles_exist = subtitles_path and os.path.exists(subtitles_path)
+        has_subtitle = False
 
         if subtitles_path and not subtitles_exist:
             print(f"尝试补充字幕 {orig_id} {title}")
             transcript_list = YouTubeTranscriptApi.list_transcripts(orig_id)
 
-            # transcript = transcript_list.find_transcript(['en'])
-            # if need_subtitle == 'cn':
-            #     transcript = transcript.translate('zh-Hans')
-            #
-            # formatter = SRTFormatter()
-            # srt_formatted = formatter.format_transcript(transcript.fetch())
-            # with open(subtitles_path, 'w', encoding='utf-8') as srt_file:
-            #     srt_file.write(srt_formatted)
             has_subtitle = download_subtitles(orig_id, subtitles_path, need_subtitle)
 
-            print(f"补充了字幕 {subtitles_path}")
             subtitles_exist = os.path.exists(subtitles_path)
+            print(f"下载了字幕 {subtitles_path}", subtitles_exist)
 
         if (subtitles_exist):
             try:
-                video_path = add_suffix_to_filename(video_path, 'with_srt') 
                 title_prefix = subtitle_title_map.get(need_subtitle, '转') if has_subtitle else '转'
                 title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
+                video_path = add_suffix_to_filename(video_path, 'with_srt') 
                 
-                ff_args = [
-                    "-i", origin_video_path,
-                    "-vf",
-                    f"subtitles={subtitles_path}",
-                    "-c:a",
-                    "copy",
-                    video_path
-                ]
-                if (need_subtitle == 'cn'):
-                    # font_file = join_root_path('static/ukai.ttc')
-                    # font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN,FontFile={font_file}'"
-                    font_name = "" if sys.platform == 'win32' else ":force_style='FontName=AR PL UKai CN"
-                    font_args = f"colorspace=bt709,subtitles={subtitles_path}{font_name}'"
-                    ff_args = ff_args[:3] + [font_args] + ff_args[4:]
+                if sys.platform == 'win32':
+                    input_path = abs_to_rel(origin_video_path, 3)
+                    srt_path = abs_to_rel(subtitles_path, 3)
+                    ass_path = srt_path[:-4] + '.ass' 
+                    output_path = abs_to_rel(video_path, 3)
+
+                    run_cli_command('ffmpeg', ['-i', srt_path, ass_path])
+                    print('🐏', origin_video_path, input_path, subtitles_path, ass_path, video_path, output_path)
+
+                    ff_args: List[str] = [
+                        "-i", input_path,
+                        "-vf", f"ass={ass_path}",
+                        output_path
+                    ]
+                else:
+                    ff_args = [
+                        "-i", origin_video_path,
+                        "-vf",
+                        f"subtitles={subtitles_path}",
+                        "-c:a",
+                        "copy",
+                        video_path
+                    ]
+                    if (need_subtitle == 'cn'):
+                        font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"
+                        font_args = f"colorspace=bt709,subtitles={subtitles_path}{font_name}'"
+                        ff_args = ff_args[:3] + [font_args] + ff_args[4:]
+
                 print("加字幕...", title, subtitles_path, ff_args)
                 run_cli_command('ffmpeg', ff_args)
             except (Exception, subprocess.CalledProcessError) as e:

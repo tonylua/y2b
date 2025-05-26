@@ -1,5 +1,6 @@
 import os 
 import re
+from pathlib import Path
 from urllib.parse import urlparse, urlencode, parse_qs, ParseResult
 
 def clean_reship_url(url, keep_query_key='v'):
@@ -68,3 +69,14 @@ def add_suffix_to_filename(file_path, suffix):
     # 结合目录和新的文件名得到新的文件路径
     new_file_path = os.path.join(directory, new_filename)
     return new_file_path
+
+def abs_to_rel(abs_path: str, base_parent_level: int = 0) -> str:
+    """将绝对路径转换为相对路径（Python raw字符串格式）
+    """
+    current_script_path = Path(__file__).resolve()
+    base_dir = current_script_path
+    for _ in range(base_parent_level):
+        base_dir = base_dir.parent
+    # 计算相对路径并规范化
+    relative_path = os.path.relpath(abs_path, base_dir)
+    return re.sub(r"\\+", "/", relative_path)
