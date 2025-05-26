@@ -2,7 +2,7 @@ import os
 import bilibili_api
 from bilibili_api import sync, video_uploader, channel_series, Credential
 from src.utils.account import AccountUtil
-from src.utils.string import truncate_str
+from src.utils.stringUtil import truncate_str
 from src.utils.sys import run_cli_command, join_root_path 
 from typing import List
 from youtube_transcript_api import YouTubeTranscriptApi

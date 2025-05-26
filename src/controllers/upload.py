@@ -9,61 +9,16 @@ from bilibili_api import video_uploader, Credential
 from bilibili_api.video_uploader import VideoUploaderEvents
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import SRTFormatter
-from utils.string import cleaned_text, truncate_str, add_suffix_to_filename, abs_to_rel
+from utils.stringUtil import cleaned_text, truncate_str, add_suffix_to_filename, abs_to_rel
 from utils.constants import Route, VideoStatus
 from utils.sys import run_cli_command, find_cover_images, join_root_path
 from utils.dict import pick
 from utils.db import VideoDB
 from utils.account import AccountUtil
-
+from utils.subtitle import download_subtitles
 
 def get_path(session, key):
     return f"{session['save_dir']}/{key}"
-
-def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> bool:
-    """下载字幕并保存为 SRT 文件，返回是否成功"""
-    try:
-        languages = ['en']
-        if need_subtitle == 'cn':
-            languages = ['zh-Hans', 'zh-CN', 'en']
-        # 方案1：使用 youtube-transcript-api
-        transcript = YouTubeTranscriptApi.get_transcript(
-            video_id, 
-            languages=languages
-        )
-        srt_content = SRTFormatter().format_transcript(transcript)
-        with open(save_path, 'w', encoding='utf-8') as f:
-            f.write(srt_content)
-        return True
-        
-    except Exception as e:
-        print(f"API 方式失败: {e}")
-        languages = ['en']
-        if need_subtitle == 'cn':
-            languages = ['zh', 'en']
-        try:
-            # 方案2：回退到 yt-dlp
-            ydl_opts = {
-                'writesubtitles': True,
-                'subtitlesformat': 'srt',
-                'subtitleslangs': languages,
-                'skip_download': True,
-                'quiet': True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([f'https://youtu.be/{video_id}'])
-            
-            # 尝试找到下载的字幕文件
-            for lang in languages:
-                srt_file = f"{video_id}.{lang}.srt"
-                if os.path.exists(srt_file):
-                    os.rename(srt_file, save_path)
-                    return True
-                    
-            return False
-        except Exception as e:
-            print(f"yt-dlp 方式失败: {e}")
-            return False
 
 async def do_upload(session, video_id):
     db = VideoDB()
@@ -94,14 +49,17 @@ async def do_upload(session, video_id):
             print(f"尝试补充字幕 {orig_id} {title}")
             transcript_list = YouTubeTranscriptApi.list_transcripts(orig_id)
 
+            # TODO 字幕语言识别不准确
             has_subtitle = download_subtitles(orig_id, subtitles_path, need_subtitle)
+            if isinstance(has_subtitle, str):
+                need_subtitle = 'en' if has_subtitle == 'en' else 'cn'
 
             subtitles_exist = os.path.exists(subtitles_path)
             print(f"下载了字幕 {subtitles_path}", subtitles_exist)
 
         if (subtitles_exist):
             try:
-                title_prefix = subtitle_title_map.get(need_subtitle, '转') if has_subtitle else '转'
+                title_prefix = subtitle_title_map.get(need_subtitle, '转') if bool(has_subtitle) else '转'
                 title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
                 video_path = add_suffix_to_filename(video_path, 'with_srt') 
                 

@@ -5,7 +5,7 @@ from json import JSONDecodeError
 from typing import List, Dict, Any
 from yt_dlp import YoutubeDL
 from .sys import join_root_path
-from .string import cleaned_text
+from .stringUtil import cleaned_text
 from ._exception import CookieException, ExceptionEnum
 
 def load_app_accounts() -> List[Dict[str, Any]]:

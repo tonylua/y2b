@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, redirect, url_for, render_template, flash, jsonify
 from yt_dlp import YoutubeDL
 from forms.download import YouTubeDownloadForm
-from utils.string import clean_reship_url
+from utils.stringUtil import clean_reship_url
 from utils.account import AccountUtil, get_youtube_info
 from utils.constants import Route, VideoStatus
 from utils.sys import join_root_path
