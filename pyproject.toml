@@ -9,7 +9,7 @@ dependencies = [
     "flask-wtf==1.2.1",
     "requests==2.32.2",
     "wtforms==3.1.2",
-    "youtube-transcript-api==0.6.2",
+    "youtube-transcript-api==1.0.3",
     "yt-dlp==2025.05.22",
     "httpx==0.28.1"
 ]

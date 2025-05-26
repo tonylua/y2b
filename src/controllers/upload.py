@@ -15,7 +15,7 @@ from utils.sys import run_cli_command, find_cover_images, join_root_path
 from utils.dict import pick
 from utils.db import VideoDB
 from utils.account import AccountUtil
-from utils.subtitle import download_subtitles
+from utils.subtitle import add_subtitle
 
 def get_path(session, key):
     return f"{session['save_dir']}/{key}"
@@ -33,79 +33,90 @@ async def do_upload(session, video_id):
 
     print(f"准备上传 {video_id} {title}")
 
-    # TODO srt字幕直接上传 https://github.com/Nemo2011/bilibili-api/issues/748
-    need_subtitle = record['subtitle_lang']
-    subtitle_title_map = {
-        'en': '英字',
-        'cn': '中字'
-    }
-    subtitles_path = '' 
-    if (need_subtitle):
-        subtitles_path = record['save_srt'] 
-        subtitles_exist = subtitles_path and os.path.exists(subtitles_path)
-        has_subtitle = False
-
-        if subtitles_path and not subtitles_exist:
-            print(f"尝试补充字幕 {orig_id} {title}")
-            transcript_list = YouTubeTranscriptApi.list_transcripts(orig_id)
-
-            # TODO 字幕语言识别不准确
-            has_subtitle = download_subtitles(orig_id, subtitles_path, need_subtitle)
-            if isinstance(has_subtitle, str):
-                need_subtitle = 'en' if has_subtitle == 'en' else 'cn'
-
-            subtitles_exist = os.path.exists(subtitles_path)
-            print(f"下载了字幕 {subtitles_path}", subtitles_exist)
-
-        if (subtitles_exist):
-            try:
-                title_prefix = subtitle_title_map.get(need_subtitle, '转') if bool(has_subtitle) else '转'
-                title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
-                video_path = add_suffix_to_filename(video_path, 'with_srt') 
-                
-                if sys.platform == 'win32':
-                    input_path = abs_to_rel(origin_video_path, 3)
-                    srt_path = abs_to_rel(subtitles_path, 3)
-                    ass_path = srt_path[:-4] + '.ass' 
-                    output_path = abs_to_rel(video_path, 3)
-
-                    run_cli_command('ffmpeg', ['-i', srt_path, ass_path])
-                    print('🐏', origin_video_path, input_path, subtitles_path, ass_path, video_path, output_path)
-
-                    ff_args: List[str] = [
-                        "-i", input_path,
-                        "-vf", f"ass={ass_path}",
-                        output_path
-                    ]
-                else:
-                    ff_args = [
-                        "-i", origin_video_path,
-                        "-vf",
-                        f"subtitles={subtitles_path}",
-                        "-c:a",
-                        "copy",
-                        video_path
-                    ]
-                    if (need_subtitle == 'cn'):
-                        font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"
-                        font_args = f"colorspace=bt709,subtitles={subtitles_path}{font_name}'"
-                        ff_args = ff_args[:3] + [font_args] + ff_args[4:]
-
-                print("加字幕...", title, subtitles_path, ff_args)
-                run_cli_command('ffmpeg', ff_args)
-            except (Exception, subprocess.CalledProcessError) as e:
-                print('ffmpeg 加字幕过程报错', e)
-        else:
-            print("设置了字幕但没下载到...", title)
-            need_subtitle = False
-            title = f"[转] {title}"
+    subtitle_result = add_subtitle(
+        record=record,
+        orig_id=orig_id,
+        title=title,
+        video_path=video_path,
+        origin_video_path=origin_video_path
+    )
+    # # TODO srt字幕直接上传 https://github.com/Nemo2011/bilibili-api/issues/748
+    # need_subtitle = record['subtitle_lang']
+    # subtitle_title_map = {
+    #     'en': '英字',
+    #     'cn': '中字'
+    # }
+    # subtitles_path = '' 
+    # if (need_subtitle):
+    #     subtitles_path = record['save_srt'] 
+    #     subtitles_exist = subtitles_path and os.path.exists(subtitles_path)
+    #     has_subtitle = False
+    #
+    #     if subtitles_path and not subtitles_exist:
+    #         print(f"尝试补充字幕 {orig_id} {title}")
+    #         transcript_list = YouTubeTranscriptApi.list_transcripts(orig_id)
+    #
+    #         # TODO 字幕语言识别不准确
+    #         has_subtitle = retryable_download(orig_id, subtitles_path, need_subtitle)
+    #         if isinstance(has_subtitle, str):
+    #             need_subtitle = 'en' if has_subtitle == 'en' else 'cn'
+    #
+    #         subtitles_exist = os.path.exists(subtitles_path)
+    #         print(f"下载字幕 {subtitles_exist}: {subtitles_path}")
+    #
+    #     if (subtitles_exist):
+    #         try:
+    #             title_prefix = subtitle_title_map.get(need_subtitle, '转') if bool(has_subtitle) else '转'
+    #             title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
+    #             video_path = add_suffix_to_filename(video_path, 'with_srt') 
+    #             
+    #             if sys.platform == 'win32':
+    #                 input_path = abs_to_rel(origin_video_path, 3)
+    #                 srt_path = abs_to_rel(subtitles_path, 3)
+    #                 ass_path = srt_path[:-4] + '.ass' 
+    #                 output_path = abs_to_rel(video_path, 3)
+    #
+    #                 run_cli_command('ffmpeg', ['-i', srt_path, ass_path])
+    #                 print('🐏', origin_video_path, input_path, subtitles_path, ass_path, video_path, output_path)
+    #
+    #                 ff_args: List[str] = [
+    #                     "-i", input_path,
+    #                     "-vf", f"ass={ass_path}",
+    #                     output_path
+    #                 ]
+    #             else:
+    #                 ff_args = [
+    #                     "-i", origin_video_path,
+    #                     "-vf",
+    #                     f"subtitles={subtitles_path}",
+    #                     "-c:a",
+    #                     "copy",
+    #                     video_path
+    #                 ]
+    #                 if (need_subtitle == 'cn'):
+    #                     font_args = f"colorspace=bt709,subtitles={subtitles_path}:force_style='FontName=AR PL UKai CN'"
+    #                     font_args = f"colorspace=bt709,subtitles={subtitles_path}{font_name}'"
+    #                     ff_args = ff_args[:3] + [font_args] + ff_args[4:]
+    #
+    #             print("加字幕...", title, subtitles_path, ff_args)
+    #             run_cli_command('ffmpeg', ff_args)
+    #         except (Exception, subprocess.CalledProcessError) as e:
+    #             print('ffmpeg 加字幕过程报错', e)
+    #     else:
+    #         print("设置了字幕但没下载到...", title)
+    #         need_subtitle = False
+    #         title = f"[转] {title}"
+    
+    title = subtitle_result['title']
     title = truncate_str(cleaned_text(title), 77)
 
+    video_path = subtitle_result['video_path']
     save_dir, _ = os.path.split(video_path)
     cover = find_cover_images(save_dir)
     if not cover:
         raise FileNotFoundError('封面不存在', record['origin_id'])
 
+    subtitles_path = subtitle_result['subtitles_path']
     db_update_args = {
         "title": title,
         "save_cover": cover,
