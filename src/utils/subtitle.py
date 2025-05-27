@@ -146,12 +146,12 @@ def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dic
         ytt_api = YouTubeTranscriptApi()
         lang = ytt_api.list(video_id).find_generated_transcript(languages)
         print("find_generated_transcript", lang.language_code);
-        fixed_path = fix_subtitle_path(save_path, lang)
+        fixed_path = fix_subtitle_path(save_path, lang.language_code)
         transcript = lang.fetch() 
         srt_content = SRTFormatter().format_transcript(transcript)
         with open(fixed_path, 'w', encoding='utf-8') as f:
             f.write(srt_content)
-        print("srt downloaded by YouTubeTranscriptApi", fixed_path, lang)
+        print("srt downloaded by YouTubeTranscriptApi", fixed_path, lang.language_code)
         return {
             'lang': 'en' if lang.language_code == 'en' else 'cn',
             'path': fixed_path
