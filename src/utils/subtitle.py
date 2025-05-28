@@ -1,4 +1,5 @@
 import os
+import re
 import sys 
 import yt_dlp
 import subprocess
@@ -46,7 +47,7 @@ def add_subtitle(
 
     # 尝试下载字幕
     if subtitles_path and not subtitles_exist:
-        print(f"尝试补充字幕 {orig_id} {title}")
+        print(f"尝试补充字幕 {orig_id} {title} {subtitles_path}")
         try:
             transcript_list = YouTubeTranscriptApi.list_transcripts(orig_id)
             subtitle_down_result = retryable_download(orig_id, subtitles_path, need_subtitle)
@@ -85,8 +86,8 @@ def add_subtitle(
             print('ffmpeg 加字幕过程报错', e)
             title = f"[转] {title}"
     else:
-        print("设置了字幕但没下载到...", title)
         title = f"[转] {title}"
+        raise FileNotFoundError('设置了字幕但没下载到', subtitles_path)
     
     return {
         'title': title,
@@ -133,8 +134,12 @@ def prepare_ffmpeg_args(
         return base_args
 
 def fix_subtitle_path(path: str, lang: str):
-    # 修正路径中的语言部分（假设路径格式为 /path/to/subtitle.{lang}.srt）
-    return f"{path.rsplit('.', 2)}.{lang}.srt"
+    # 修正路径中的语言部分（假设路径格式为 /path/to/subtitle.{old_lang}.srt）
+    pattern = re.compile(r'(.*)(\.)[a-zA-Z\-]+(\.srt)$', re.IGNORECASE)
+    if pattern.match(path):
+        return pattern.sub(fr'\1.{lang}\3', path)
+    else:
+        return path 
 
 def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dict[str, str] | bool:
     """下载字幕并保存为 SRT 文件，返回是否成功"""
@@ -144,16 +149,19 @@ def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dic
             languages = ['zh-Hans', 'zh-CN', 'en']
         # 方案1：使用 youtube-transcript-api
         ytt_api = YouTubeTranscriptApi()
-        lang = ytt_api.list(video_id).find_generated_transcript(languages)
-        print("find_generated_transcript", lang.language_code);
-        fixed_path = fix_subtitle_path(save_path, lang.language_code)
-        transcript = lang.fetch() 
-        srt_content = SRTFormatter().format_transcript(transcript)
+        transcript = ytt_api.list(video_id).find_generated_transcript(languages)
+        print("find_generated_transcript", transcript.language_code);
+        fixed_path = fix_subtitle_path(save_path, transcript.language_code)
+        print("fix_subtitle_path", fixed_path);
+
+        fetched_transcript = transcript.fetch() 
+        srt_content = SRTFormatter().format_transcript(fetched_transcript)
         with open(fixed_path, 'w', encoding='utf-8') as f:
             f.write(srt_content)
-        print("srt downloaded by YouTubeTranscriptApi", fixed_path, lang.language_code)
+        print("srt downloaded by YouTubeTranscriptApi", fixed_path, transcript.language_code)
+
         return {
-            'lang': 'en' if lang.language_code == 'en' else 'cn',
+            'lang': 'en' if transcript.language_code == 'en' else 'cn',
             'path': fixed_path
         }
         
