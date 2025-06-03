@@ -122,6 +122,17 @@ def download_controller(session, url):
         session['save_video'] = f"{orig_id}.{session['resolution']}.mp4"
         save_path = os.path.join(session['save_dir'], session['save_video'])
         save_srt = os.path.join(session['save_dir'], f"{orig_id}.{subtitle_locale}.srt") if subtitle_locale else '' 
+
+        # https://github.com/yt-dlp/yt-dlp/blob/e1b6062f8c4a3fa33c65269d48d09ec78de765a2/yt_dlp/YoutubeDL.py#L315
+        #
+        # writesubtitles:    Write the video subtitles to a file
+        # writeautomaticsub: Write the automatically generated subtitles to a file
+        # listsubtitles:     Lists all available subtitles for the video
+        # subtitlesformat:   The format code for subtitles
+        # subtitleslangs:    List of languages of the subtitles to download (can be regex).
+        #                    The list may contain "all" to refer to all the available
+        #                    subtitles. The language can be prefixed with a "-" to
+        #                    exclude it from the requested languages, e.g. ['all', '-live_chat']
         opts = {
             'writesubtitles': bool(need_subtitle), 
             'subtitleslangs': [subtitle_locale], 

@@ -146,10 +146,12 @@ def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dic
     try:
         languages = ['en']
         if need_subtitle == 'cn':
+            # https://www.searchapi.io/docs/parameters/youtube-transcripts/lang
             languages = ['zh-Hans', 'zh-CN', 'en']
+        print(need_subtitle, '-->', languages)
         # 方案1：使用 youtube-transcript-api
         ytt_api = YouTubeTranscriptApi()
-        transcript = ytt_api.list(video_id).find_generated_transcript(languages)
+        transcript = ytt_api.list(video_id).find_transcript(languages)
         print("find_generated_transcript", transcript.language_code);
         fixed_path = fix_subtitle_path(save_path, transcript.language_code)
         print("fix_subtitle_path", fixed_path);
