@@ -169,38 +169,38 @@ def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dic
         
     except Exception as e:
         print(f"API 方式失败: {e}")
-        languages = ['en']
-        if need_subtitle == 'cn':
-            languages = ['zh', 'en']
-        try:
-            # 方案2：回退到 yt-dlp
-            ydl_opts = {
-                'writesubtitles': True,
-                'subtitlesformat': 'srt',
-                'subtitleslangs': languages,
-                'skip_download': True,
-                'quiet': True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([f'https://youtu.be/{video_id}'])
-            
-            # 尝试找到下载的字幕文件
-            for lang in languages:
-                srt_file = f"{video_id}.{lang}.srt"
-                if os.path.exists(srt_file):
-                    fixed_path = fix_subtitle_path(save_path, lang)
-                    os.rename(srt_file, fixed_path)
-                    print("srt downloaded by yt_dlp", save_path, lang)
-                    return {
-                        'lang': 'en' if lang == 'en' else 'cn',
-                        'path': fixed_path
-                    } 
-                    
-            print(f"yt-dlp 方式失败")
-            return False
-        except Exception as e:
-            print(f"yt-dlp 方式失败: {e}")
-            return False
+        # languages = ['en']
+        # if need_subtitle == 'cn':
+        #     languages = ['zh', 'en']
+        # try:
+        #     # 方案2：回退到 yt-dlp
+        #     ydl_opts = {
+        #         'writesubtitles': True,
+        #         'subtitlesformat': 'srt',
+        #         'subtitleslangs': languages,
+        #         'skip_download': True,
+        #         'quiet': True,
+        #     }
+        #     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        #         ydl.download([f'https://youtu.be/{video_id}'])
+        #     
+        #     # 尝试找到下载的字幕文件
+        #     for lang in languages:
+        #         srt_file = f"{video_id}.{lang}.srt"
+        #         if os.path.exists(srt_file):
+        #             fixed_path = fix_subtitle_path(save_path, lang)
+        #             os.rename(srt_file, fixed_path)
+        #             print("srt downloaded by yt_dlp", save_path, lang)
+        #             return {
+        #                 'lang': 'en' if lang == 'en' else 'cn',
+        #                 'path': fixed_path
+        #             } 
+        #             
+        #     print(f"yt-dlp 方式失败")
+        #     return False
+        # except Exception as e:
+        #     print(f"yt-dlp 方式失败: {e}")
+        #     return False
 
 retryable_download = retry(max_retries=3)(download_subtitles)
 

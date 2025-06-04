@@ -4,8 +4,8 @@ import json
 from json import JSONDecodeError
 from typing import List, Dict, Any
 from yt_dlp import YoutubeDL
-from .sys import join_root_path
 from .stringUtil import cleaned_text
+from .sys import join_root_path
 from ._exception import CookieException, ExceptionEnum
 
 def load_app_accounts() -> List[Dict[str, Any]]:
@@ -44,6 +44,34 @@ def get_youtube_info(video_url):
             "title": cleaned_text(title),
             "file_size": file_size
         }
+
+
+def check_bili_edit_info(bvid: str):
+    page_path = f"https://member.bilibili.com/x/vupre/web/archive/view?bvid={bvid}"
+    cookie_path = join_root_path('config/cookie.json')
+    with open(cookie_path, 'r', encoding='utf-8') as f:
+        cookies = json.load(f)
+    cookie_dict = {item['name']: item['value'] for item in cookies}
+    cookie_string = "; ".join([f"{name}={value}" for name, value in cookie_dict.items()])
+    try:
+        response = requests.get(
+            page_path,
+            headers={"Cookie": cookie_string}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('code') == 0:
+                return {
+                    "cid": data["data"]["videos"][0]["cid"],
+                    "aid": data["data"]["videos"][0]["aid"]
+                }
+            else:
+                raise Exception("稿件不存在或无法获取信息")
+        else:
+            raise Exception(f"获取视频数据失败: {str(response.status_code)}")
+    except Exception as error:
+        print(f"获取视频数据失败:", str(error), page_path)
+        raise
 
 # https://github.com/SP-FA/autoBilibili
 class AccountUtil:
@@ -90,3 +118,4 @@ class AccountUtil:
         # print('Valid Cookie, user name: %s' % user_name)
         self.session.cookies['user_name'] = user_name
         return self.session.cookies
+
