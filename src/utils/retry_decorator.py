@@ -70,6 +70,9 @@ def retry(
             for attempt in range(1, max_retries + 1):
                 try:
                     result = func(*args, **kwargs)
+                    if result is None:
+                        print(f"[Retry] Got None result, triggering retry {attempt}")
+                        raise RetryableError("Result is None")
                     # 如果有自定义判断函数且返回False则重试
                     if should_retry and should_retry(result):
                         raise RetryableError(result)

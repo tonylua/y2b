@@ -10,6 +10,7 @@
 ### update
 
 - uv pip install 'yt-dlp==v2025.05.22'
+- 手动更新 pyproject.toml
 
 ### fonts(win)
 

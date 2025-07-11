@@ -67,10 +67,8 @@ def add_subtitle(
             # 更新标题前缀
             title_prefix = subtitle_title_map.get(need_subtitle, '转') if subtitle_down_result else '转'
             title = f"[{title_prefix}] {title.replace(r'^\[.*?]\s*', '')}"
-            
             # 更新视频路径
             video_path = add_suffix_to_filename(video_path, 'with_srt')
-            
             # 准备FFmpeg参数
             ff_args = prepare_ffmpeg_args(
                 origin_video_path,
@@ -78,7 +76,6 @@ def add_subtitle(
                 video_path,
                 need_subtitle
             )
-            
             print("加字幕...", title, subtitles_path, ff_args)
             run_cli_command('ffmpeg', ff_args)
             
