@@ -139,7 +139,6 @@ def fix_subtitle_path(path: str, lang: str):
         return path 
 
 def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dict[str, str] | bool:
-    """下载字幕并保存为 SRT 文件，返回是否成功"""
     try:
         languages = ['en']
         if need_subtitle == 'cn':

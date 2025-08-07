@@ -706,8 +706,8 @@ requires-dist = [
     { name = "httpx", specifier = "==0.28.1" },
     { name = "requests", specifier = "==2.32.2" },
     { name = "wtforms", specifier = "==3.1.2" },
-    { name = "youtube-transcript-api", specifier = "==1.1.1" },
-    { name = "yt-dlp", specifier = "==2025.6.30" },
+    { name = "youtube-transcript-api", specifier = ">=1.2.2" },
+    { name = "yt-dlp", specifier = "==2025.7.21" },
 ]
 
 [[package]]
@@ -758,22 +758,22 @@ wheels = [
 
 [[package]]
 name = "youtube-transcript-api"
-version = "1.1.1"
+version = "1.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "defusedxml" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/eb/e5/226a09b9ca49136f901a969fd65bcd055eaa980fd04ac065dac4741e6b00/youtube_transcript_api-1.1.1.tar.gz", hash = "sha256:2e1162d45ece14223a58a4a39176c464fdd33d5ebdd6def18ebb038dea62f667", size = 470360 }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/f8/5e12d3d0c7001c3b3078697b9918241022bdb1ae12715e9debb00a83e16e/youtube_transcript_api-1.2.2.tar.gz", hash = "sha256:5f67cfaff3621d969778817a3d7b2172c16784855f45fcaed4f0529632e2fef4", size = 469634 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a7/8a/b942a230084045da4a255bbebca97693569535670c0a23c09096881b2846/youtube_transcript_api-1.1.1-py3-none-any.whl", hash = "sha256:a438a824d67c0885855047e2b38993abdd4f59b69a983cf27b50a06c9d564064", size = 485906 },
+    { url = "https://files.pythonhosted.org/packages/41/92/3d1a580f0efcad926f45876cf6cb92b2c260e84ae75dae5463bbf38f92e7/youtube_transcript_api-1.2.2-py3-none-any.whl", hash = "sha256:feca8c7f7c9d65188ef6377fc0e01cf466e6b68f1b3e648019646ab342f994d2", size = 485047 },
 ]
 
 [[package]]
 name = "yt-dlp"
-version = "2025.6.30"
+version = "2025.7.21"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/23/9c/ff64c2fed7909f43a9a0aedb7395c65404e71c2439198764685a6e3b3059/yt_dlp-2025.6.30.tar.gz", hash = "sha256:6d0ae855c0a55bfcc28dffba804ec8525b9b955d34a41191a1561a4cec03d8bd", size = 3034364 }
+sdist = { url = "https://files.pythonhosted.org/packages/7e/3a/343f7a0024ddd4c30f150e8d8f57fd7b924846f97d99fc0dcd75ea8d2773/yt_dlp-2025.7.21.tar.gz", hash = "sha256:46fbb53eab1afbe184c45b4c17e9a6eba614be680e4c09de58b782629d0d7f43", size = 3050219 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/41/2f048ae3f6d0fa2e59223f08ba5049dbcdac628b0a9f9deac722dd9260a5/yt_dlp-2025.6.30-py3-none-any.whl", hash = "sha256:541becc29ed7b7b3a08751c0a66da4b7f8ee95cb81066221c78e83598bc3d1f3", size = 3279333 },
+    { url = "https://files.pythonhosted.org/packages/e8/2f/abe59a3204c749fed494849ea29176bcefa186ec8898def9e43f649ddbcf/yt_dlp-2025.7.21-py3-none-any.whl", hash = "sha256:d7aa2b53f9b2f35453346360f41811a0dad1e956e70b35a4ae95039d4d815d15", size = 3288681 },
 ]
