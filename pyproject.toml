@@ -12,6 +12,11 @@ dependencies = [
     "youtube-transcript-api>=1.2.2",
     "yt-dlp==2025.7.21",
     "httpx==0.28.1",
+    "sacremoses==0.1.1",
+    "srt==3.5.3",
+    "transformers==4.55.0",
+    "sentencepiece==0.2.0",
+    "torch==2.8.0"
 ]
 
 [tool.uv.sources]
