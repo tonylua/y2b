@@ -25,15 +25,23 @@ def rename_completed_file(file_path, replaced_str = ''):
     else:
         print("提供的文件名中没有找到 '.tmp' 标识符")
 
-def find_cover_images(directory):
+def find_cover_images(directory, id):
     """
-    扫描指定目录，查找常见的封面图片格式文件。
+    扫描指定目录，查找常见的封面图片格式文件，优先匹配包含指定id的文件。
     
     :param directory: 要扫描的目录路径
-    :return: 第一张封面图的文件路径，如果没有找到则返回None
+    :param id: 要匹配的标识符（如书籍ID、产品ID等）
+    :return: 路径匹配id的封面图，否则返回第一张封面图，如果没有找到则返回None
     """
     image_extensions = ['*.webp', '*.jpg', '*.jpeg', '*.png', '*.gif']
-    cover_images = [file for ext in image_extensions for file in glob.glob(os.path.join(directory, ext))]
+    cover_images = [file for ext in image_extensions 
+                   for file in glob.glob(os.path.join(directory, ext))]
+    # 优先匹配包含id的文件（不区分大小写）
+    for img_path in cover_images:
+        filename = os.path.basename(img_path).lower()
+        if str(id).lower() in filename:
+            return img_path
+    # 没有匹配到id则返回第一张图（如果存在）
     return cover_images[0] if cover_images else None
 
 def run_cli_command(command_name, args_list):

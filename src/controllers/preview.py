@@ -13,7 +13,7 @@ def preview_controller(session):
         flash(f"视频未找到，请重新尝试。{video_path}", "warning")
         return redirect(url_for(Route.LOGIN))
     
-    cover = find_cover_images(session['save_dir'])
+    cover = find_cover_images(session['save_dir'], record['origin_id'])
     if not (cover):
         flash(f"封面未找到，请重新尝试。", "warning")
         return redirect(url_for(Route.LOGIN))

@@ -48,7 +48,7 @@ async def do_upload(session, video_id):
     title = truncate_str(cleaned_text(title), 77)
 
     save_dir, _ = os.path.split(video_path)
-    cover = find_cover_images(save_dir)
+    cover = find_cover_images(save_dir, orig_id)
     if not cover:
         raise FileNotFoundError('封面不存在', record['origin_id'])
 

@@ -164,7 +164,7 @@ def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dic
         lang = need_subtitle
         translator = SRTTranslator()
         translator.translate_srt_file(tmp_path, fixed_path)
-        print("srt translated", fixed_path)
+        print("srt translated", fixed_path, transcript.language_code, need_subtitle)
     return {
         'lang': lang,
         'path': fixed_path
