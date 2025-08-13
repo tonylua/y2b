@@ -9,6 +9,7 @@ from youtube_transcript_api.formatters import SRTFormatter
 from .retry_decorator import retry
 from .stringUtil import add_suffix_to_filename, abs_to_rel
 from .sys import run_cli_command 
+from .translate_srt import SRTTranslator
 
 def add_subtitle(
     record: Dict,
@@ -49,7 +50,7 @@ def add_subtitle(
     if subtitles_path and not subtitles_exist:
         print(f"尝试补充字幕 {orig_id} {title} {subtitles_path}")
         try:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(orig_id)
+            transcript_list = YouTubeTranscriptApi().list(orig_id)
             subtitle_down_result = retryable_download(orig_id, subtitles_path, need_subtitle)
 
             if (subtitle_down_result):
@@ -139,67 +140,34 @@ def fix_subtitle_path(path: str, lang: str):
         return path 
 
 def download_subtitles(video_id: str, save_path: str, need_subtitle: str) -> Dict[str, str] | bool:
-    try:
-        languages = ['en']
-        if need_subtitle == 'cn':
-            # https://www.searchapi.io/docs/parameters/youtube-transcripts/lang
-            languages = ['zh-Hans', 'zh-CN', 'en']
-        print(need_subtitle, '-->', languages)
-        # 方案1：使用 youtube-transcript-api
-        ytt_api = YouTubeTranscriptApi()
-        transcript = ytt_api.list(video_id).find_transcript(languages)
-        print("find_generated_transcript", transcript.language_code);
-        fixed_path = fix_subtitle_path(save_path, transcript.language_code)
-        print("fix_subtitle_path", fixed_path);
-
-        fetched_transcript = transcript.fetch() 
-        srt_content = SRTFormatter().format_transcript(fetched_transcript)
-        with open(fixed_path, 'w', encoding='utf-8') as f:
-            f.write(srt_content)
-        print("srt downloaded by YouTubeTranscriptApi", fixed_path, transcript.language_code)
-
-        return {
-            'lang': 'en' if transcript.language_code == 'en' else 'cn',
-            'path': fixed_path
-        }
-        
-    except Exception as e:
-        print(f"API 方式失败: {e}")
-        # languages = ['en']
-        # if need_subtitle == 'cn':
-        #     languages = ['zh', 'en']
-        # try:
-        #     # 方案2：回退到 yt-dlp
-        #     ydl_opts = {
-        #         'writesubtitles': True,
-        #         'subtitlesformat': 'srt',
-        #         'subtitleslangs': languages,
-        #         'skip_download': True,
-        #         'quiet': True,
-        #     }
-        #     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        #         ydl.download([f'https://youtu.be/{video_id}'])
-        #     
-        #     # 尝试找到下载的字幕文件
-        #     for lang in languages:
-        #         srt_file = f"{video_id}.{lang}.srt"
-        #         if os.path.exists(srt_file):
-        #             fixed_path = fix_subtitle_path(save_path, lang)
-        #             os.rename(srt_file, fixed_path)
-        #             print("srt downloaded by yt_dlp", save_path, lang)
-        #             return {
-        #                 'lang': 'en' if lang == 'en' else 'cn',
-        #                 'path': fixed_path
-        #             } 
-        #             
-        #     print(f"yt-dlp 方式失败")
-        #     return False
-        # except Exception as e:
-        #     print(f"yt-dlp 方式失败: {e}")
-        #     return False
+    languages = ['en']
+    if need_subtitle == 'cn':
+        # https://www.searchapi.io/docs/parameters/youtube-transcripts/lang
+        languages = ['zh-Hans', 'zh-CN', 'en']
+    print(need_subtitle, '-->', languages)
+    # step1：使用 youtube-transcript-api
+    ytt_api = YouTubeTranscriptApi()
+    transcript = ytt_api.list(video_id).find_transcript(languages)
+    print("find_generated_transcript", transcript.language_code);
+    tmp_path = fix_subtitle_path(save_path, transcript.language_code)
+    lang = 'en' if transcript.language_code == 'en' else 'cn'
+    print("fix_subtitle_path", tmp_path);
+    fetched_transcript = transcript.fetch() 
+    srt_content = SRTFormatter().format_transcript(fetched_transcript)
+    with open(tmp_path, 'w', encoding='utf-8') as f:
+        f.write(srt_content)
+    print("srt downloaded by YouTubeTranscriptApi", tmp_path)
+    fixed_path = tmp_path
+    # step2：使用本地模型加工en字幕
+    if need_subtitle != transcript.language_code:
+        fixed_path = tmp_path.replace(f'.{transcript.language_code}.srt$', f'.{need_subtitle}.srt')
+        lang = need_subtitle
+        translator = SRTTranslator()
+        translator.translate_srt_file(tmp_path, fixed_path)
+        print("srt translated", fixed_path)
+    return {
+        'lang': lang,
+        'path': fixed_path
+    }
 
 retryable_download = retry(max_retries=3)(download_subtitles)
-
-
-# if __name__ == "__main__":
-#     download_subtitles("5Ox1mzP-hQc", "123.srt", "cn")
