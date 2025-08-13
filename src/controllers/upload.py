@@ -3,9 +3,9 @@ import sys
 import platform
 import subprocess
 from flask import Flask, request, redirect, url_for, flash
-import bilibili_api
 import yt_dlp
-from bilibili_api import video_uploader, Credential
+import bilibili_api
+from bilibili_api import video_uploader, Credential, request_settings
 from bilibili_api.video_uploader import VideoUploaderEvents
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import SRTFormatter
@@ -95,6 +95,7 @@ async def do_upload(session, video_id):
         description = desc
     )
     uploader = video_uploader.VideoUploader([page], vu_meta, credential)
+    # request_settings.set_proxy("http://127.0.0.1:10808")
 
     @uploader.on("__ALL__")
     async def ev(data, args = db_update_args):
