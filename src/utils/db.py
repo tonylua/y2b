@@ -1,13 +1,22 @@
 import sqlite3
+import json
 from contextlib import contextmanager
 from .sys import join_root_path
+
+# 在数据库类初始化时添加类型适配器
+def adapt_list(lst):
+    return json.dumps(lst)
+def convert_list(s):
+    return json.loads(s.decode('utf-8'))
+sqlite3.register_adapter(list, adapt_list)
+sqlite3.register_converter("JSON", convert_list)
 
 db_dir = join_root_path('db')
 
 class BaseORM:
     def __init__(self, db_name):
         db_path = f"{db_dir}/{db_name}"
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, detect_types=sqlite3.PARSE_DECLTYPES)
         self.conn.row_factory = sqlite3.Row  # 设置row_factory，以便查询时使用字典结果
         print('db __init__: path', db_path)
         self.cursor = self.conn.cursor()
