@@ -1,4 +1,5 @@
 import os
+import re
 import argparse
 import secrets
 from functools import wraps
@@ -26,6 +27,13 @@ app = Flask(__name__,
 )
 app.config['SECRET_KEY'] = secrets.token_urlsafe(32) 
 app.config['SESSION_TYPE'] = 'filesystem'
+
+@app.template_filter('static_path')
+def static_path_filter(path):
+    """将绝对路径转换为以/static开头的相对路径"""
+    return re.sub(r'^.*[\\/]static[\\/]', '/static/', path.replace('\\', '/'))
+# 注册过滤器
+app.jinja_env.filters['static_path'] = static_path_filter
 
 @app.context_processor
 def inject_global_vars():
