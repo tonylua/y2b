@@ -14,7 +14,7 @@ from controllers.list import list_controller
 from controllers.pending import fetch_pending_list
 
 arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument('--port', type=int, help='flask port', default=5000)
+arg_parser.add_argument('--port', type=int, help='flask port', default=5003)
 args = arg_parser.parse_args()
 
 current_file_path = os.path.abspath(__file__)
