@@ -16,7 +16,7 @@ class YouTubeDownloadForm(FlaskForm):
     ], default='720')
     need_subtitle = RadioField(
         '添加字幕',
-        choices=[('en', '英文'), ('cn', '中文'), ('', '不添加')],
+        choices=[('en', '英文'), ('cn', '中文'), ('bilingual', '双语'), ('', '不添加')],
         default='en'
     )
     auto_upload = RadioField(

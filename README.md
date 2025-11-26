@@ -48,9 +48,31 @@ docker logs -f <containerId>
 
 ---
 
-<del>
-## 初始化
-sudo apt install ffmpeg
+</del> 
+ 
+ ```
+
+## 双语字幕（Bilingual SRT）
+
+本项目现在支持生成双语字幕：把原始字幕与机器翻译的译文合并为一个 SRT 文件（原文在上，译文在下）。合并功能不依赖大型机器学习库，因此可以在不安装 torch / transformers 时使用；但如果需要自动翻译，仍需安装并配置这些库。
+
+示例：
+
+- 使用自动下载并生成双语（程序化调用）
+
+```python
+from src.utils.subtitle import download_subtitles
+download_subtitles("<youtube_video_id>", "./out.srt", need_subtitle='bilingual')
+```
+
+- 如果已经有原文与译文两个 SRT 文件，可以直接合并：
+
+```python
+from src.utils.translate_srt import merge_srt_files
+merge_srt_files('video.en.srt', 'video.cn.srt', 'video.en_cn.srt')
+```
+
+注意：ffmpeg 嵌入字幕时对字体和样式有一定要求（windows 会先把 SRT 转为 ASS），如果需要在视频上正确渲染中文或特殊字体，请参考 `src/utils/subtitle.py` 中 `prepare_ffmpeg_args` 的实现并调整 `FontName` 设置。
 sudo apt-get install fonts-arphic-ukai fonts-arphic-uming
 pip install -r requirements.txt
 vim /usr/local/lib/python3.11/dist-packages/bilibili_api/video_uploader.py

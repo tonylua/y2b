@@ -96,6 +96,7 @@ def download_controller(session, url):
         subtitle_map = {
             'en': "en",
             'cn': "zh-Hans",
+            'bilingual': "en",  # prefer downloading original en subtitles, we'll translate+merge later
         }
         need_subtitle = request.form.get('need_subtitle')
         session['need_subtitle'] = need_subtitle
