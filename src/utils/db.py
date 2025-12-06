@@ -58,6 +58,14 @@ class VideoDB(BaseORM):
             row = self.cursor.fetchone()
             return dict(row)
     
+    def query_video_by_origin_id(self, user, origin_id):
+        """根据 user 和 origin_id 查询是否已存在该视频记录"""
+        with self.transaction():
+            query = f"SELECT * FROM {self.table_name} WHERE user = ? AND origin_id = ?;"
+            self.cursor.execute(query, (user, origin_id))
+            row = self.cursor.fetchone()
+            return dict(row) if row else None
+
     def list_videos(self, user):
         """列出所有视频记录"""
         with self.transaction():

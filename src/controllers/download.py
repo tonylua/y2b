@@ -152,16 +152,23 @@ def download_controller(session, url):
         # }
 
         db = VideoDB()
-        video_id = db.create_video(
-            user = user,
-            origin_id = orig_id,
-            origin_url = video_url, 
-            save_path = save_path, 
-            save_srt = save_srt,
-            title = info["title"],
-            subtitle_lang = need_subtitle
-        )
-        db.update_video(video_id, status=VideoStatus.DOWNLOADING)
+        # Check if this video (by user + origin_id) already exists; if so, reuse and update it
+        existing_video = db.query_video_by_origin_id(user, orig_id)
+        if existing_video:
+            video_id = existing_video['id']
+            print(f"Video {orig_id} already exists for user {user}; reusing record {video_id}")
+            db.update_video(video_id, save_path=save_path, save_srt=save_srt, subtitle_lang=need_subtitle, status=VideoStatus.DOWNLOADING)
+        else:
+            video_id = db.create_video(
+                user = user,
+                origin_id = orig_id,
+                origin_url = video_url, 
+                save_path = save_path, 
+                save_srt = save_srt,
+                title = info["title"],
+                subtitle_lang = need_subtitle
+            )
+            db.update_video(video_id, status=VideoStatus.DOWNLOADING)
 
         print('准备下载', video_id, '\n', opts)
         current_session = session._get_current_object()
