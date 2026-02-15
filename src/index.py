@@ -2,16 +2,27 @@ import os
 import re
 import argparse
 import secrets
+import sys
 from functools import wraps
 from flask import Flask, g, session, request, flash, redirect, url_for  
 from controllers.login import login_controller
-# from controllers.download import download_controller, download_video_ajax, download_status_ajax
+# from controllers.download import download_video_ajax, download_status_ajax
 # from controllers.preview import preview_controller
 from controllers.download import download_controller
 from controllers.upload import upload_controller
 from controllers.delete import delete_controller
 from controllers.list import list_controller
 from controllers.pending import fetch_pending_list
+
+# 添加 yt-dlp 自动升级功能
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from upgrade_yt_dlp import main as upgrade_yt_dlp_main
+    print("正在检查 yt-dlp 版本...")
+    upgrade_yt_dlp_main()
+except Exception as e:
+    print(f"yt-dlp 升级检查失败: {e}")
+    # 继续执行，不中断程序
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('--port', type=int, help='flask port', default=5003)
