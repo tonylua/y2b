@@ -4,3 +4,4 @@ __pycache__
 config/*.json
 *venv/
 .session.vim
+.yt-dlp-last-check

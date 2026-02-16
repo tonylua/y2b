@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Callable
 import time
 import logging
 import re
@@ -82,7 +82,8 @@ class SRTTranslator:
         self,
         input_path: str,
         output_path: str,
-        encoding: str = "utf-8"
+        encoding: str = "utf-8",
+        progress_callback: Optional[Callable[[int, int], None]] = None
     ) -> None:
         """
         翻译整个SRT文件
@@ -91,40 +92,47 @@ class SRTTranslator:
             input_path: 输入文件路径
             output_path: 输出文件路径
             encoding: 文件编码
+            progress_callback: 进度回调函数 (current, total)
         """
-        # 解析SRT文件 (延迟导入以避免在模块导入时要求 srt 库)
-        import srt
-        with open(input_path, 'r', encoding=encoding) as f:
-            subtitles = list(srt.parse(f.read()))
-        
-        # 分批处理
-        translated_subs = []
-        current_batch = []
-        batch_indices = []
-        
-        for i, sub in enumerate(subtitles):
-            if len(sub.content) > self.max_chars:
-                logging.warning(f"Subtitle {i} exceeds {self.max_chars} characters")
-                translated_subs.append(sub)  # 保留原文
-                continue
-                
-            current_batch.append(sub.content)
-            batch_indices.append(i)
+        try:
+            import srt
+            with open(input_path, 'r', encoding=encoding) as f:
+                subtitles = list(srt.parse(f.read()))
             
-            if len(current_batch) >= self.batch_size:
+            total_subs = len(subtitles)
+            translated_subs = []
+            current_batch = []
+            batch_indices = []
+            
+            for i, sub in enumerate(subtitles):
+                if len(sub.content) > self.max_chars:
+                    logging.warning(f"Subtitle {i} exceeds {self.max_chars} characters")
+                    translated_subs.append(sub)
+                    continue
+                    
+                current_batch.append(sub.content)
+                batch_indices.append(i)
+                
+                if len(current_batch) >= self.batch_size:
+                    self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
+                    if progress_callback:
+                        progress_callback(len(translated_subs), total_subs)
+                    current_batch = []
+                    batch_indices = []
+            
+            if current_batch:
                 self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
-                current_batch = []
-                batch_indices = []
-        
-        # 处理剩余批次
-        if current_batch:
-            self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
-        
-        # 写入输出文件
-        with open(output_path, 'w', encoding=encoding) as f:
-            f.write(srt.compose(translated_subs))
-        
-        logging.info(f"Translation completed. Output saved to {output_path}")
+                if progress_callback:
+                    progress_callback(len(translated_subs), total_subs)
+            
+            # 写入输出文件
+            with open(output_path, 'w', encoding=encoding) as f:
+                f.write(srt.compose(translated_subs))
+            
+            logging.info(f"Translation completed. Output saved to {output_path}")
+        except KeyboardInterrupt:
+            logging.info("\n用户中断了字幕翻译")
+            raise
 
     def _process_batch(
         self,

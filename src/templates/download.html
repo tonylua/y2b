@@ -4,12 +4,12 @@
 
 {% block content %}
 <div class="container">
-    <form method="POST">
+    <form id="downloadForm" method="POST">
         {{ form.csrf_token }}
         {% for field in form if field.name != 'csrf_token' %}
             <div class="form-group row {% if field.errors %} has-error{% endif %}">
                 {% if field.type == 'SubmitField' %}
-                    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">{{ form.submit.label.text }}</button>
                 {% else %}
                     <label class="col-sm-2 col-form-label">
                         {{ field.label(class="form-control-label") }}: 
@@ -37,13 +37,32 @@
             </div>
         {% endfor %}
     </form>
+
+    <div id="progressContainer" style="display: none; margin-top: 30px;">
+        <h4>下载进度</h4>
+        <div class="card">
+            <div class="card-body">
+                <div class="progress mb-2" style="height: 25px;">
+                    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+                <div id="progressText" class="text-muted"></div>
+            </div>
+        </div>
+    </div>
+
+    <ul id="pending_list">
+    </ul>
 </div>
-<ul id="pending_list">
-</ul>
 {% endblock %}
 
 {% block footer %}
 <script>
+let currentVideoId = null;
+let progressInterval = null;
+let notFoundCount = 0;
+const MAX_NOT_FOUND = 10;
+
 $(document).ready(function() {
     $.ajax({
         url: '{{ url_for("fetch_pending") }}',
@@ -51,7 +70,7 @@ $(document).ready(function() {
         dataType: 'json',
         success: function(data) {
             var list = $('#pending_list');
-            list.empty(); // 清空列表
+            list.empty();
 
             $.each(data, function(index, video) {
                 var listItem = $('<li>')
@@ -69,6 +88,141 @@ $(document).ready(function() {
             console.error('Error fetching playlist:', error);
         }
     });
+
+    $('#downloadForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = $(this).serialize();
+        
+        $('#submitBtn').prop('disabled', true).text('处理中...');
+        notFoundCount = 0;
+        
+        $.ajax({
+            url: '{{ url_for("download") }}',
+            type: 'POST',
+            data: formData,
+            dataType: 'json',
+            success: function(response) {
+                if (response.video_id) {
+                    currentVideoId = response.video_id;
+                    $('#progressContainer').show();
+                    startProgressPolling();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error:', error);
+                $('#submitBtn').prop('disabled', false).text('{{ form.submit.label.text }}');
+                alert('提交失败，请重试');
+            }
+        });
+    });
 });
+
+function startProgressPolling() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+    }
+    
+    progressInterval = setInterval(function() {
+        $.ajax({
+            url: '/api/download/progress/' + currentVideoId,
+            type: 'GET',
+            dataType: 'json',
+            success: function(progress) {
+                notFoundCount = 0;
+                
+                if (!progress || progress.error) {
+                    $.ajax({
+                        url: '/api/download/progress',
+                        type: 'GET',
+                        dataType: 'json',
+                        success: function(allProgress) {
+                            if (allProgress && allProgress.length > 0) {
+                                allProgress.sort(function(a, b) {
+                                    return new Date(b.updated_at) - new Date(a.updated_at);
+                                });
+                                var latest = allProgress[0];
+                                currentVideoId = latest.video_id;
+                                notFoundCount = 0;
+                                updateProgressUI(latest);
+                            }
+                        }
+                    });
+                    return;
+                }
+                
+                if (progress.video_id !== currentVideoId) {
+                    currentVideoId = progress.video_id;
+                }
+                
+                updateProgressUI(progress);
+                
+                if (progress.completed) {
+                    clearInterval(progressInterval);
+                    if (progress.error) {
+                        $('#submitBtn').prop('disabled', false).text('{{ form.submit.label.text }}');
+                    } else {
+                        setTimeout(function() {
+                            window.location.href = '{{ url_for("list_page") }}';
+                        }, 2000);
+                    }
+                }
+            },
+            error: function(xhr) {
+                if (xhr.status === 404) {
+                    notFoundCount++;
+                    
+                    if (notFoundCount >= MAX_NOT_FOUND) {
+                        clearInterval(progressInterval);
+                        $('#progressText').html('<span class="text-danger">找不到下载进度，任务可能已结束</span>');
+                        $('#submitBtn').prop('disabled', false).text('{{ form.submit.label.text }}');
+                        return;
+                    }
+                    
+                    $.ajax({
+                        url: '/api/download/progress',
+                        type: 'GET',
+                        dataType: 'json',
+                        success: function(allProgress) {
+                            if (allProgress && allProgress.length > 0) {
+                                allProgress.sort(function(a, b) {
+                                    return new Date(b.updated_at) - new Date(a.updated_at);
+                                });
+                                var latest = allProgress[0];
+                                currentVideoId = latest.video_id;
+                                notFoundCount = 0;
+                                updateProgressUI(latest);
+                            }
+                        }
+                    });
+                }
+            }
+        });
+    }, 1000);
+}
+
+function updateProgressUI(progress) {
+    var progressPercent = Math.min(Math.max(progress.progress, 0), 100);
+    var progressBar = $('#progressBar');
+    progressBar.css('width', progressPercent + '%');
+    progressBar.attr('aria-valuenow', progressPercent);
+    
+    if (progress.error) {
+        $('#progressText').html('<span class="text-danger">' + progress.error + '</span>');
+        progressBar.removeClass('progress-bar-success progress-bar-info progress-bar-warning').addClass('progress-bar-danger');
+    } else {
+        var statusText = progress.stage_name + ' - ' + progressPercent + '%';
+        if (progress.message) {
+            statusText += ' - ' + progress.message;
+        }
+        $('#progressText').text(statusText);
+        
+        if (progress.completed) {
+            progressBar.removeClass('progress-bar-danger progress-bar-info progress-bar-warning').addClass('progress-bar-success');
+        } else {
+            progressBar.removeClass('progress-bar-danger progress-bar-success progress-bar-warning').addClass('progress-bar-info');
+        }
+    }
+}
 </script>
 {% endblock %}

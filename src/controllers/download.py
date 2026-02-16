@@ -1,77 +1,64 @@
 import os
 import traceback
-# import uuid
 import asyncio
-# from threading import Thread
-from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, request, redirect, url_for, render_template, flash, jsonify
+import threading
+from datetime import datetime
+from flask import request, redirect, url_for, render_template, flash, jsonify
 from yt_dlp import YoutubeDL
 from forms.download import YouTubeDownloadForm
 from utils.stringUtil import clean_reship_url
 from utils.account import AccountUtil, get_youtube_info
-from utils.constants import Route, VideoStatus
-from utils.sys import join_root_path
+from utils.constants import Route, VideoStatus, DownloadStage
+from utils.sys import join_root_path, clean_temp_files
 from utils.db import VideoDB
+from utils.progress import download_progress
 from .upload import do_upload
 
-# task_status = {}
-# def create_progress_hook(task_id):
-#     def hook(d):
-#         if d['status'] == 'finished':
-#             task_status[task_id]['status'] = VideoStatus.DOWNLOADING
-#             task_status[task_id]['progress'] = '100%'
-#         elif d['status'] == 'downloading':
-#             task_status[task_id]['status'] = VideoStatus.DOWNLOADING
-#             task_status[task_id]['progress'] = d['_percent_str']
-#         elif d['status'] == 'error':
-#             task_status[task_id]['status'] = VideoStatus.ERROR
-#             task_status[task_id]['progress'] = 'ERR'
-#     return hook
 
-async def run_yt_dlp(session, url, video_id, ydl_opts):
-    save_path = os.path.join(session['save_dir'], session['save_video'])
-    if (os.path.exists(save_path)):
-        print("文件已存在")
+async def run_yt_dlp(session, url, video_id, ydl_opts, final_save_path, temp_save_path):
+    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 0, '开始下载视频')
+    
+    if os.path.exists(final_save_path):
+        print("文件已存在，跳过下载")
+        download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 100, '使用已存在的视频文件')
     else:
         with YoutubeDL(ydl_opts) as ydl:
             print("开始下载...", video_id)
             try:
                 ydl.download([url])
-            except AttributeError as e:
-                print('=== ERR ===', e, video_id)
+                
+                if os.path.exists(temp_save_path):
+                    os.rename(temp_save_path, final_save_path)
+                    print(f"文件已重命名: {temp_save_path} -> {final_save_path}")
+                    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 100, '视频下载完成')
+                else:
+                    raise Exception(f"临时文件不存在: {temp_save_path}")
+            except Exception as e:
+                if os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
+                    print(f"已清理临时文件: {temp_save_path}")
                 raise e
-    # task_status[task_id]['status'] = VideoStatus.DOWNLOADED
+    
+    download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 0, '准备上传')
     result = await do_upload(session, video_id)
     return True, result
 
-async def yt_dlp_worker(session, url, video_id, ydl_opts):
+
+async def yt_dlp_worker(session, url, video_id, ydl_opts, final_save_path, temp_save_path):
     try:
-        return await run_yt_dlp(session, url, video_id, ydl_opts)
+        return await run_yt_dlp(session, url, video_id, ydl_opts, final_save_path, temp_save_path)
     except Exception as e:
         traceback.print_exc()
         print('run_yt_dlp ERR', e, video_id)
-        # if isinstance(e, AttributeError):
-        #     e = jsonify(e)
+        download_progress.set_error(video_id, str(e))
         db = VideoDB()
         db.update_video(video_id, status=VideoStatus.ERROR)
         return False, e
 
+
 def yt_dlp_sync_wrapper(*args):
-    """同步包装器，用于在非异步上下文中运行异步函数"""
     return asyncio.run(yt_dlp_worker(*args))
 
-# def async_yt_dlp_in_thread(*args):
-#     loop = asyncio.new_event_loop()
-#     asyncio.set_event_loop(loop) 
-#     try:
-#         loop.run_until_complete(run_yt_dlp(*args))  
-#     except Exception as e:
-#         video_id = args[2]
-#         print('async_yt_dlp_in_thread ERR', e, video_id)
-#         db = VideoDB()
-#         db.update_video(video_id, status=VideoStatus.ERROR)
-#     finally:
-#         loop.close() 
 
 def download_controller(session, url):
     user = session['login_name']
@@ -92,25 +79,17 @@ def download_controller(session, url):
     form = YouTubeDownloadForm(**args)
 
     if form.validate_on_submit():
-        
         subtitle_map = {
             'en': "en",
             'cn': "zh-Hans",
-            'bilingual': "en",  # prefer downloading original en subtitles, we'll translate+merge later
+            'bilingual': "en",
         }
         need_subtitle = request.form.get('need_subtitle')
         session['need_subtitle'] = need_subtitle
-        subtitle_locale = subtitle_map.get(need_subtitle, '') 
+        subtitle_locale = subtitle_map.get(need_subtitle, '')
 
         video_url = clean_reship_url(request.form.get('video_url'))
         session['video_url'] = video_url
-
-        info = get_youtube_info(video_url)
-        orig_id = info["id"]
-        session['origin_title'] = info["title"]
-        session['origin_id'] = orig_id
-        session['origin_file_size'] = info["file_size"]
-        print("获取了视频标题等...", info)
 
         session['resolution'] = request.form.get('resolution')
         session['SESSDATA'] = request.form.get('sessdata')
@@ -120,75 +99,101 @@ def download_controller(session, url):
         session['tid'] = request.form.get('tid')
         session['tags'] = request.form.get('tags')
 
-        session['save_video'] = f"{orig_id}.{session['resolution']}.mp4"
-        save_path = os.path.join(session['save_dir'], session['save_video'])
-        save_srt = os.path.join(session['save_dir'], f"{orig_id}.{subtitle_locale}.srt") if subtitle_locale else '' 
+        temp_id = f"temp_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        download_progress.start_progress(temp_id, '正在准备...')
+        download_progress.update_stage(temp_id, DownloadStage.PREPARING, 0, '正在初始化...')
 
-        # https://github.com/yt-dlp/yt-dlp/blob/e1b6062f8c4a3fa33c65269d48d09ec78de765a2/yt_dlp/YoutubeDL.py#L315
-        #
-        # writesubtitles:    Write the video subtitles to a file
-        # writeautomaticsub: Write the automatically generated subtitles to a file
-        # listsubtitles:     Lists all available subtitles for the video
-        # subtitlesformat:   The format code for subtitles
-        # subtitleslangs:    List of languages of the subtitles to download (can be regex).
-        #                    The list may contain "all" to refer to all the available
-        #                    subtitles. The language can be prefixed with a "-" to
-        #                    exclude it from the requested languages, e.g. ['all', '-live_chat']
-        opts = {
-            'writesubtitles': bool(need_subtitle), 
-            'subtitleslangs': [subtitle_locale], 
-            'writesubtitlesformat': 'srt' if need_subtitle else None, 
-            'writethumbnail': True,     
-            'outtmpl': save_path, 
-            'format': f"bv*[height<={session['resolution']}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
-            # 'progress_hooks': [create_progress_hook(task_id)],
-        }
-        # task_status[task_id] = {
-        #     'status': VideoStatus.DOWNLOADING, 
-        #     'progress': '', 
-        #     'id': orig_id,
-        #     'title': session['origin_title'],
-        #     'path': save_path
-        # }
-
-        db = VideoDB()
-        # Check if this video (by user + origin_id) already exists; if so, reuse and update it
-        existing_video = db.query_video_by_origin_id(user, orig_id)
-        if existing_video:
-            video_id = existing_video['id']
-            print(f"Video {orig_id} already exists for user {user}; reusing record {video_id}")
-            db.update_video(video_id, save_path=save_path, save_srt=save_srt, subtitle_lang=need_subtitle, status=VideoStatus.DOWNLOADING)
-        else:
-            video_id = db.create_video(
-                user = user,
-                origin_id = orig_id,
-                origin_url = video_url, 
-                save_path = save_path, 
-                save_srt = save_srt,
-                title = info["title"],
-                subtitle_lang = need_subtitle
-            )
-            db.update_video(video_id, status=VideoStatus.DOWNLOADING)
-
-        print('准备下载', video_id, '\n', opts)
+        print('准备处理下载请求...')
         current_session = session._get_current_object()
-        # thread = Thread(target=async_yt_dlp_in_thread, args=(current_session, video_url, opts, task_id, video_id))
-        # thread.start()
-        with ThreadPoolExecutor() as executor:
-            future = executor.submit(
-                yt_dlp_sync_wrapper, 
-                current_session, 
-                video_url, 
-                video_id, 
-                opts
-            )
-            result = future.result()
-            is_succ, msg = result 
-            if is_succ:
-                return redirect(url_for(Route.LIST))
-            flash(f"An error occurred: {msg}", 'warning')
-            return redirect(url_for(Route.LOGIN))
-
-        # return redirect(url_for(Route.LIST))
         
+        def background_task():
+            video_id = None
+            temp_save_path = None
+            try:
+                download_progress.update_stage(temp_id, DownloadStage.FETCHING_INFO, 5, '正在获取视频信息...')
+                info = get_youtube_info(video_url)
+                orig_id = info["id"]
+                current_session['origin_title'] = info["title"]
+                current_session['origin_id'] = orig_id
+                current_session['origin_file_size'] = info["file_size"]
+                print("获取了视频标题等...", info)
+
+                current_session['save_video'] = f"{orig_id}.{current_session['resolution']}.mp4"
+                final_save_path = os.path.join(current_session['save_dir'], current_session['save_video'])
+                temp_save_path = os.path.join(current_session['save_dir'], f"{orig_id}.{current_session['resolution']}.tmp.mp4")
+                save_srt = os.path.join(current_session['save_dir'], f"{orig_id}.{subtitle_locale}.srt") if subtitle_locale else ''
+
+                opts = {
+                    'writesubtitles': bool(need_subtitle),
+                    'subtitleslangs': [subtitle_locale],
+                    'writesubtitlesformat': 'srt' if need_subtitle else None,
+                    'writethumbnail': True,
+                    'outtmpl': temp_save_path,
+                    'format': f"bv*[height<={current_session['resolution']}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
+                }
+
+                db = VideoDB()
+                existing_video = db.query_video_by_origin_id(user, orig_id)
+                if existing_video:
+                    video_id = existing_video['id']
+                    print(f"Video {orig_id} already exists for user {user}; reusing record {video_id}")
+                    db.update_video(video_id, save_path=final_save_path, save_srt=save_srt, subtitle_lang=need_subtitle, status=VideoStatus.DOWNLOADING)
+                else:
+                    video_id = db.create_video(
+                        user=user,
+                        origin_id=orig_id,
+                        origin_url=video_url,
+                        save_path=final_save_path,
+                        save_srt=save_srt,
+                        title=info["title"],
+                        subtitle_lang=need_subtitle
+                    )
+                    db.update_video(video_id, status=VideoStatus.DOWNLOADING)
+
+                download_progress.update_video_id(temp_id, str(video_id))
+                download_progress.update_stage(str(video_id), DownloadStage.FETCHING_INFO, 10, '视频信息获取完成')
+
+                print('准备下载', video_id, '\n', opts)
+
+                result = yt_dlp_sync_wrapper(
+                    current_session,
+                    video_url,
+                    str(video_id),
+                    opts,
+                    final_save_path,
+                    temp_save_path
+                )
+                is_succ, msg = result
+                if is_succ:
+                    download_progress.complete_progress(str(video_id))
+                else:
+                    download_progress.set_error(str(video_id), str(msg))
+            except KeyboardInterrupt:
+                print("\n用户中断了后台任务")
+                if temp_save_path and os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
+                    print(f"已清理临时文件: {temp_save_path}")
+                if video_id:
+                    download_progress.set_error(str(video_id), '用户中断操作')
+                    db = VideoDB()
+                    db.update_video(video_id, status=VideoStatus.ERROR)
+                else:
+                    download_progress.set_error(temp_id, '用户中断操作')
+            except Exception as e:
+                traceback.print_exc()
+                print(f'后台任务出错: {e}')
+                if temp_save_path and os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
+                    print(f"已清理临时文件: {temp_save_path}")
+                if video_id:
+                    download_progress.set_error(str(video_id), str(e))
+                else:
+                    download_progress.set_error(temp_id, str(e))
+
+        thread = threading.Thread(target=background_task)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'video_id': temp_id, 'status': 'started'})
+
     return render_template('download.html', form=form)

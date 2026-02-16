@@ -7,13 +7,58 @@
 2. 获取最新的 yt-dlp 版本
 3. 如果有新版本，升级 yt-dlp
 4. 更新 pyproject.toml 文件中的 yt-dlp 版本
+5. 如果当天已经检查过，则跳过
 """
 import os
 import re
 import subprocess
 import json
 import sys
+from datetime import datetime
 from typing import Optional
+
+
+def get_last_check_date() -> Optional[str]:
+    """
+    获取上次检查日期
+    
+    Returns:
+        Optional[str]: 上次检查日期 (YYYY-MM-DD)，如果没有记录则返回 None
+    """
+    try:
+        check_file = '.yt-dlp-last-check'
+        if os.path.exists(check_file):
+            with open(check_file, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        return None
+    except Exception as e:
+        print(f"读取上次检查日期失败: {e}")
+        return None
+
+
+def save_last_check_date():
+    """保存今天的检查日期"""
+    try:
+        check_file = '.yt-dlp-last-check'
+        today = datetime.now().strftime('%Y-%m-%d')
+        with open(check_file, 'w', encoding='utf-8') as f:
+            f.write(today)
+    except Exception as e:
+        print(f"保存检查日期失败: {e}")
+
+
+def is_today_checked() -> bool:
+    """
+    检查今天是否已经检查过
+    
+    Returns:
+        bool: 今天是否已经检查过
+    """
+    last_check = get_last_check_date()
+    if not last_check:
+        return False
+    today = datetime.now().strftime('%Y-%m-%d')
+    return last_check == today
 
 
 def get_current_version() -> Optional[str]:
@@ -155,6 +200,11 @@ def main():
     """
     主函数，执行 yt-dlp 升级流程
     """
+    # 检查今天是否已经检查过
+    if is_today_checked():
+        print("今天已经检查过 yt-dlp 更新，跳过检查")
+        return
+    
     print("开始检查并升级 yt-dlp...")
     
     # 尝试使用 uv 命令升级 yt-dlp
@@ -215,6 +265,10 @@ def main():
         except Exception as e2:
             print(f"使用 pip 升级也失败: {e2}")
             print("继续执行程序...")
+    
+    # 保存今天的检查日期
+    save_last_check_date()
+    print("已记录今天的检查日期")
 
 
 if __name__ == "__main__":
