@@ -97,8 +97,8 @@ class AccountUtil:
             raise CookieException(ExceptionEnum.COOKIE_CONFIG_ERR, 'Cookies are not configured in ' + config_path)
         self.headers = {
             'origin': 'https://space.bilibili.com',
-            'User-Agent': "Mozilla/5.0 (Windows NT 6.3; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/39.0.2171.95 Safari/537.36"
+            'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/120.0.0.0 Safari/537.36"
         }
     def verify_cookie(self):
         """
@@ -112,10 +112,21 @@ class AccountUtil:
         url = 'https://space.bilibili.com/%s/favlist' % self.uid
         homePage = self.session.get(url, headers=self.headers)
         home_page = homePage.content.decode("utf-8")
+        # 调试：保存页面内容到临时文件
+        # import tempfile
+        # with open(tempfile.gettempdir() + '/bili_home_page_debug.html', 'w', encoding='utf-8') as f:
+        #     f.write(home_page)
+        # 判断页面 title 是否包含 "个人空间"（SPA 页面，title 由服务端渲染）
         if '个人空间' not in home_page:
-            raise CookieException(ExceptionEnum.INVALID_COOKIE_ERR, 'Invalid Cookie.')
-        user_name = re.findall(r'关注(.*)账号', home_page)[0]
-        # print('Valid Cookie, user name: %s' % user_name)
+            raise CookieException(ExceptionEnum.INVALID_COOKIE_ERR, 'Invalid Cookie. ' + url)
+        # 从 <title>用户名的个人空间</title> 提取用户名
+        title_match = re.search(r'<title>([^<]+)的个人空间', home_page)
+        if title_match:
+            user_name = title_match.group(1).strip()
+        else:
+            # 回退：尝试旧的匹配方式
+            user_name_match = re.findall(r'关注(.*)账号', home_page)
+            user_name = user_name_match[0] if user_name_match else 'unknown'
         self.session.cookies['user_name'] = user_name
         return self.session.cookies
 

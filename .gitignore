@@ -5,3 +5,5 @@ config/*.json
 *venv/
 .session.vim
 .yt-dlp-last-check
+.bilibili-api-last-check
+.claude/

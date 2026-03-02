@@ -24,6 +24,13 @@ try:
 except Exception as e:
     print(f"yt-dlp 升级检查失败: {e}")
 
+try:
+    from upgrade_bilibili_api import main as upgrade_bilibili_api_main
+    print("正在检查 bilibili-api-python 版本...")
+    upgrade_bilibili_api_main()
+except Exception as e:
+    print(f"bilibili-api-python 升级检查失败: {e}")
+
 # 命令行参数
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('--port', type=int, help='flask port', default=5003)
