@@ -35,8 +35,7 @@ async def run_yt_dlp(session, url, video_id, ydl_opts, final_save_path, temp_sav
                     raise Exception(f"临时文件不存在: {temp_save_path}")
             except Exception as e:
                 if os.path.exists(temp_save_path):
-                    os.remove(temp_save_path)
-                    print(f"已清理临时文件: {temp_save_path}")
+                    print(f"保留临时文件以便恢复: {temp_save_path}")
                 raise e
     
     download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 0, '准备上传')
@@ -130,6 +129,9 @@ def download_controller(session, url):
                     'writethumbnail': True,
                     'outtmpl': temp_save_path,
                     'format': f"bv*[height<={current_session['resolution']}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
+                    'continuedl': True,
+                    'retries': 10,
+                    'fragment_retries': 10,
                 }
 
                 db = VideoDB()

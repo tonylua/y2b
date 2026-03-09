@@ -12,6 +12,7 @@ from .sys import run_cli_command, get_video_duration
 from .translate_srt import SRTTranslator
 
 
+
 def add_subtitle(
     record: Dict,
     orig_id: str,
@@ -54,9 +55,7 @@ def add_subtitle(
     if subtitles_path and not subtitles_exist:
         print(f"尝试补充字幕 {orig_id} {title} {subtitles_path}")
         try:
-            update_progress(26, '正在获取字幕列表...')
-            transcript_list = YouTubeTranscriptApi().list(orig_id)
-            update_progress(28, '正在下载字幕...')
+            update_progress(26, '正在下载字幕...')
             subtitle_down_result = retryable_download(orig_id, subtitles_path, need_subtitle, update_progress)
 
             if subtitle_down_result:
@@ -64,11 +63,17 @@ def add_subtitle(
                 subtitles_path = subtitle_down_result['path']
                 subtitles_exist = os.path.exists(subtitles_path)
                 print(f"下载字幕 {subtitles_exist}: {subtitles_path}")
+            else:
+                # 已尝试通过 YouTubeTranscriptApi+yt-dlp(+youtube-dl)等回退下载字幕，未找到
+                print('字幕下载失败，已回退多种下载方式仍未获取到字幕')
+                # 如果用户明确指定需要字幕，则中断整个流程
+                raise RuntimeError(f'缺少字幕: {need_subtitle} 尚未获取到')
         except KeyboardInterrupt:
             print("\n用户中断了字幕下载")
             raise
         except Exception as e:
             print(f"下载字幕失败: {e}")
+            raise
     elif subtitles_exist:
         existing_type = check_subtitle_type(subtitles_path)
         print(f"现有字幕类型: {existing_type}, 需要类型: {need_subtitle}")
@@ -286,33 +291,69 @@ def _yt_dlp_download_subtitles(video_id: str, save_path: str, languages: List[st
     out_dir = os.path.dirname(save_path) or '.'
     outtmpl = os.path.join(out_dir, f"{video_id}.%(ext)s")
     video_url = f"https://www.youtube.com/watch?v={video_id}"
-
-    args = [
-        '--skip-download',
-        '--write-sub',
-        '--write-auto-sub',
-        '--sub-lang', ','.join(languages),
-        '--sub-format', 'srt',
-        '-o', outtmpl,
-        video_url
+    # Try multiple strategies to maximize chance of getting English subtitles quickly
+    strategies = [
+        (['--write-auto-sub'], 'auto-sub only'),
+        (['--write-sub'], 'manual-sub only'),
+        (['--write-sub', '--write-auto-sub'], 'both subs'),
     ]
 
-    try:
-        run_cli_command('yt-dlp', args)
-    except Exception as e:
-        print('yt-dlp 缺省命令执行失败:', e)
-        return False
-
-    candidates = glob.glob(os.path.join(out_dir, f"{video_id}*.srt"))
-    if not candidates:
-        return False
-
+    # also try language variants for English
+    lang_variants = []
     for lang in languages:
-        for c in candidates:
-            if re.search(rf"\.{re.escape(lang)}\.srt$", c, re.IGNORECASE):
-                return c
+        if lang.lower() == 'en':
+            lang_variants.extend(['en', 'en-US', 'en-GB'])
+        else:
+            lang_variants.append(lang)
 
-    return candidates[0]
+    tried = []
+    for flags, desc in strategies:
+        for lang in lang_variants:
+            args = ['--skip-download'] + flags + ['--sub-lang', lang, '--sub-format', 'srt', '-o', outtmpl, video_url]
+            tried.append((desc, lang))
+            try:
+                run_cli_command('yt-dlp', args)
+            except Exception as e:
+                print(f'yt-dlp {desc}({lang}) 失败:', e)
+                continue
+
+            candidates = glob.glob(os.path.join(out_dir, f"{video_id}*.srt"))
+            if not candidates:
+                continue
+
+            # prefer exact lang match
+            for c in candidates:
+                if re.search(rf"\.{re.escape(lang)}\.srt$", c, re.IGNORECASE):
+                    return c
+
+            # fallback to any candidate
+            return candidates[0]
+
+    # try youtube-dl as an extra fallback if installed
+    try:
+        for flags, desc in strategies:
+            for lang in lang_variants:
+                args = ['--skip-download'] + flags + ['--sub-lang', lang, '--sub-format', 'srt', '-o', outtmpl, video_url]
+                tried.append((f'youtube-dl {desc}', lang))
+                try:
+                    run_cli_command('youtube-dl', args)
+                except Exception as e:
+                    print(f'youtube-dl {desc}({lang}) 失败:', e)
+                    continue
+
+                candidates = glob.glob(os.path.join(out_dir, f"{video_id}*.srt"))
+                if not candidates:
+                    continue
+
+                for c in candidates:
+                    if re.search(rf"\.{re.escape(lang)}\.srt$", c, re.IGNORECASE):
+                        return c
+                return candidates[0]
+    except Exception:
+        pass
+
+    print('尝试的 字幕下载 策略列表:', tried)
+    return False
 
 
 retryable_download = retry(max_retries=3)(download_subtitles)
