@@ -27,7 +27,9 @@ async def do_upload(session, video_id):
     download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 20, '准备上传')
 
     try:
-        title = truncate_str(cleaned_text(title), 77)
+        # ensure title is cleaned and legal for bilibili (<=80 chars)
+        from utils.stringUtil import sanitize_title
+        title = sanitize_title(cleaned_text(title), max_len=80)
         save_dir, _ = os.path.split(video_path)
         
         download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 22, '检查封面...')
@@ -84,7 +86,13 @@ async def do_upload(session, video_id):
         }
         credential = Credential(**args)
 
-        desc = f"via. {record['origin_url']}"
+        # include full original video name in description alongside origin URL
+        origin_name = record.get('origin_title') or record.get('title') or ''
+        desc = f"via. {record['origin_url']} | {origin_name}"
+
+        # Ensure the final title passed to the uploader is legal for bilibili
+        from utils.stringUtil import sanitize_title_for_bilibili
+        title = sanitize_title_for_bilibili(title, max_len=80)
         tid = record['tid'] if record['tid'] else 231
         tags = record['tags'].split(',') if record['tags'] and len(record['tags']) else ['youtube']
         vu_data = {

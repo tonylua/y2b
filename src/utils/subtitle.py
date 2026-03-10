@@ -7,9 +7,52 @@ from typing import Optional, Dict, List, Callable
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import SRTFormatter
 from .retry_decorator import retry
+from .db import VideoDB
 from .stringUtil import add_suffix_to_filename, abs_to_rel
 from .sys import run_cli_command, get_video_duration
 from .translate_srt import SRTTranslator
+
+
+def _is_probably_translated_srt(path: str, sample_lines: int = 200) -> bool:
+    """Rudimentary heuristic: sample the file and decide if it contains
+    a meaningful amount of Chinese (CJK) characters, or mixed bilingual lines.
+    Returns True if it's likely already translated (bilingual).
+    """
+    try:
+        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = []
+            for _ in range(sample_lines):
+                line = f.readline()
+                if not line:
+                    break
+                lines.append(line.strip())
+        if not lines:
+            return False
+
+        total = 0
+        cjk_count = 0
+        lines_with_cjk = 0
+        for ln in lines:
+            if not ln:
+                continue
+            total += len(ln)
+            # count CJK characters
+            cjk_matches = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]', ln)
+            if cjk_matches:
+                cjk_count += len(cjk_matches)
+                lines_with_cjk += 1
+
+        # if many lines contain CJK, treat as translated
+        if lines_with_cjk >= max(3, int(len(lines) * 0.05)):
+            return True
+
+        # if proportion of CJK chars over sampled chars > 2%
+        if total and (cjk_count / total) > 0.02:
+            return True
+
+    except Exception:
+        return False
+    return False
 
 
 
@@ -39,6 +82,43 @@ def add_subtitle(
     subtitles_exist = subtitles_path and os.path.exists(subtitles_path)
     subtitle_down_result = False
     actual_subtitle_type = need_subtitle
+
+    # If requested bilingual but the stored path (save_srt) doesn't exist,
+    # search for any merged subtitle file by original id (e.g. GQvDNRBe4IU.en_cn.srt)
+    # and use it to skip re-downloading/translating.
+    if need_subtitle == 'bilingual' and not subtitles_exist:
+        # Prefer searching in the video's save directory (where subtitles are usually written).
+        # Fallback to directory of `save_srt` if provided, otherwise current dir.
+        search_dir = ''
+        if origin_video_path:
+            search_dir = os.path.dirname(origin_video_path)
+        if not search_dir and subtitles_path:
+            search_dir = os.path.dirname(subtitles_path)
+        if not search_dir:
+            search_dir = '.'
+        # prefer searching by orig_id if available
+        prefix = orig_id if orig_id else (os.path.basename(subtitles_path).split('.')[0] if subtitles_path else '')
+        if prefix:
+            candidates = glob.glob(os.path.join(search_dir, f"{prefix}*.srt"))
+            for c in candidates:
+                # look for merged files containing an underscore before the .srt
+                if re.search(r"_[^.]+\.srt$", os.path.basename(c)):
+                    # verify file likely contains Chinese / bilingual content
+                    if _is_probably_translated_srt(c):
+                        subtitles_path = c
+                        subtitles_exist = True
+                        actual_subtitle_type = 'bilingual'
+                        print(f"Found existing merged subtitle by orig_id, skipping translate: {c}")
+                        # persist this found subtitle path back to DB so future runs see it immediately
+                        try:
+                            if record and isinstance(record, dict) and record.get('id'):
+                                db = VideoDB()
+                                db.update_video(record['id'], save_srt=subtitles_path)
+                        except Exception:
+                            pass
+                        break
+                    else:
+                        print(f"Found candidate merged subtitle but content not bilingual-looking: {c}")
 
     def check_subtitle_type(path: str) -> str:
         if not path or not os.path.exists(path):
@@ -78,11 +158,39 @@ def add_subtitle(
         existing_type = check_subtitle_type(subtitles_path)
         print(f"现有字幕类型: {existing_type}, 需要类型: {need_subtitle}")
         
+        # If user wants bilingual but saved path is a single-language file,
+        # check nearby files (same dir, same orig_id prefix) for an existing merged file
+        if need_subtitle == 'bilingual' and existing_type != 'bilingual':
+            try:
+                search_dir = os.path.dirname(subtitles_path) or '.'
+                prefix = orig_id if orig_id else os.path.basename(subtitles_path).split('.')[0]
+                if prefix:
+                    candidates = glob.glob(os.path.join(search_dir, f"{prefix}*.srt"))
+                    for c in candidates:
+                        if re.search(r"_[^.]+\.srt$", os.path.basename(c)):
+                            if _is_probably_translated_srt(c):
+                                subtitles_path = c
+                                subtitles_exist = True
+                                existing_type = 'bilingual'
+                                actual_subtitle_type = 'bilingual'
+                                print(f"Found existing merged subtitle near saved SRT, skipping translate: {c}")
+                                try:
+                                    if record and isinstance(record, dict) and record.get('id'):
+                                        db = VideoDB()
+                                        db.update_video(record['id'], save_srt=subtitles_path)
+                                except Exception:
+                                    pass
+                                break
+                            else:
+                                print(f"Found candidate merged subtitle but content not bilingual-looking: {c}")
+            except Exception:
+                pass
+
         if need_subtitle == 'bilingual' and existing_type != 'bilingual':
             print("需要双语字幕，但现有字幕不是双语，尝试翻译...")
             try:
                 update_progress(26, '正在翻译字幕...')
-                translator = SRTTranslator()
+                translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
                 base_path = subtitles_path.rsplit('.', 1)[0]
                 other_lang = 'cn' if '.en.srt' in subtitles_path else 'en'
                 translated_path = f"{base_path.rsplit('.', 1)[0]}.{other_lang}.srt"
@@ -111,25 +219,54 @@ def add_subtitle(
             title_prefix = subtitle_title_map.get(actual_subtitle_type, '转')
             cleaned_title = re.sub(r'^(\[.*?\]\s*)+', '', title)
             title = f"[{title_prefix}] {cleaned_title}"
-            video_path = add_suffix_to_filename(video_path, 'with_srt')
+            # final path with subtitle suffix
+            final_with_srt = add_suffix_to_filename(video_path, 'with_srt')
+
+            # If final file already exists, skip embedding
+            if os.path.exists(final_with_srt):
+                print("已存在带字幕的视频，跳过嵌入字幕:", final_with_srt)
+                return {
+                    'title': title,
+                    'video_path': final_with_srt,
+                    'subtitles_path': subtitles_path
+                }
+
+            # write to a temp output first, then atomically rename to final
+            temp_output = final_with_srt + '.tmp'
             ff_args = prepare_ffmpeg_args(
                 origin_video_path,
                 subtitles_path,
-                video_path,
+                temp_output,
                 need_subtitle
             )
             print("加字幕...", title, subtitles_path, ff_args)
             video_duration = get_video_duration(origin_video_path)
-            
+
             last_percent = [25]
             def ffmpeg_progress_callback(percent: int, message: str):
                 mapped_percent = 25 + int(percent * 0.14)
                 if mapped_percent > last_percent[0]:
                     last_percent[0] = mapped_percent
                     update_progress(mapped_percent, '正在嵌入字幕...')
-            
+
             update_progress(25, '正在嵌入字幕...')
-            run_cli_command('ffmpeg', ff_args, ffmpeg_progress_callback, video_duration)
+            try:
+                run_cli_command('ffmpeg', ff_args, ffmpeg_progress_callback, video_duration)
+                # move temp to final
+                try:
+                    os.replace(temp_output, final_with_srt)
+                except Exception:
+                    # fallback to rename
+                    if os.path.exists(temp_output):
+                        os.rename(temp_output, final_with_srt)
+                video_path = final_with_srt
+            finally:
+                # cleanup any leftover temp file
+                if os.path.exists(temp_output):
+                    try:
+                        os.remove(temp_output)
+                    except Exception:
+                        pass
 
         except KeyboardInterrupt:
             print("\n用户中断了字幕处理")
@@ -238,7 +375,7 @@ def download_subtitles(
             translated_path = tmp_path.replace(f'.{transcript_lang}.srt', f'.{other_lang}.srt')
             try:
                 update_progress(29, '正在翻译字幕...')
-                translator = SRTTranslator()
+                translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
                 translator.translate_srt_file(tmp_path, translated_path)
                 merged_path = tmp_path.replace(f'.{transcript_lang}.srt', f'.{transcript_lang}_{other_lang}.srt')
                 translator.merge_srt_files(tmp_path, translated_path, merged_path)
@@ -267,7 +404,7 @@ def download_subtitles(
         other_lang = 'cn' if transcript.language_code == 'en' else 'en'
         translated_path = tmp_path.replace(f'.{transcript.language_code}.srt', f'.{other_lang}.srt')
         update_progress(29, '正在翻译字幕...')
-        translator = SRTTranslator()
+        translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
         translator.translate_srt_file(tmp_path, translated_path)
         merged_path = tmp_path.replace(f'.{transcript.language_code}.srt', f'.{transcript.language_code}_{other_lang}.srt')
         translator.merge_srt_files(tmp_path, translated_path, merged_path)

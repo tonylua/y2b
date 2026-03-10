@@ -53,10 +53,21 @@ class DownloadProgress:
             video_id = str(video_id)
             if video_id not in self._progress_map:
                 return
-            self._progress_map[video_id].update({
+            # Prevent decreasing progress unless moving to ERROR or COMPLETED
+            existing = self._progress_map[video_id]
+            old_progress = existing.get('progress', 0) or 0
+            if stage in (DownloadStage.ERROR, DownloadStage.COMPLETED):
+                new_progress = progress
+            else:
+                try:
+                    new_progress = max(old_progress, int(progress))
+                except Exception:
+                    new_progress = old_progress
+
+            existing.update({
                 'stage': stage,
                 'stage_name': STAGE_NAMES[stage],
-                'progress': progress,
+                'progress': new_progress,
                 'message': message,
                 'updated_at': datetime.now().isoformat()
             })

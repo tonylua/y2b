@@ -1,4 +1,4 @@
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Dict
 import time
 import logging
 import re
@@ -30,7 +30,10 @@ class SRTTranslator:
         model_name: str = "Helsinki-NLP/opus-mt-en-zh",
         device: Optional[str] = None,
         batch_size: int = 8,
-        max_chars: int = 1000
+        max_chars: int = 4000,
+        translate_mode: str = "batch",
+        domain: Optional[str] = None,
+        glossary: Optional[Dict[str, str]] = None
     ):
         """
         初始化本地字幕翻译器
@@ -50,7 +53,14 @@ class SRTTranslator:
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.batch_size = batch_size
+        # max_chars used for chunking when doing full-text translation
         self.max_chars = max_chars
+        # translate_mode: 'batch' (per-subtitle batches) or 'full' (concatenate then split)
+        self.translate_mode = translate_mode
+        # domain hint to help preserve technical terminology
+        self.domain = domain
+        # optional glossary to apply post-translation replacements {src: dst}
+        self.glossary = glossary or {}
         
         # 初始化模型
         # imported inside __init__ so unit tests that only use merging don't need heavy packages
@@ -78,6 +88,105 @@ class SRTTranslator:
         outputs = self.model.generate(**inputs)
         return self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
 
+    def _translate_full(self, subtitles: List[object], progress_callback: Optional[Callable[[int, int], None]] = None) -> List[object] | None:
+        """
+        Concatenate subtitle contents with unique markers, translate in chunked blocks,
+        then split translated text back by markers to produce translated subtitles.
+        Returns None on failure to indicate fallback should be used.
+        """
+        import re
+        try:
+            # build segments with markers
+            segments = []
+            for i, sub in enumerate(subtitles):
+                segments.append((i, sub.content))
+
+            # chunk segments so each chunk's char length <= max_chars
+            # If a single segment is larger than max_chars, split it into sentence-like subparts
+            chunks = []
+            current = []
+            current_len = 0
+            for idx, content in segments:
+                part = f"|||SEG{idx}|||\n{content}\n"
+                if len(part) > self.max_chars:
+                    # split content into sentence-like pieces (handles Chinese/English punctuation and newlines)
+                    pieces = [p.strip() for p in re.split(r'(?<=[。.!?\n])\s*', content) if p.strip()]
+                    if not pieces:
+                        pieces = [content]
+                    for n, piece in enumerate(pieces):
+                        subpart = f"|||SEG{idx}_SUB{n}|||\n{piece}\n"
+                        if current and (current_len + len(subpart) > self.max_chars):
+                            chunks.append(current)
+                            current = [subpart]
+                            current_len = len(subpart)
+                        else:
+                            current.append(subpart)
+                            current_len += len(subpart)
+                else:
+                    if current and (current_len + len(part) > self.max_chars):
+                        chunks.append(current)
+                        current = [part]
+                        current_len = len(part)
+                    else:
+                        current.append(part)
+                        current_len += len(part)
+            if current:
+                chunks.append(current)
+
+            translated_chunks = []
+            total = len(subtitles)
+            done = 0
+            for ch in chunks:
+                chunk_text = "".join(ch)
+                if self.domain:
+                    chunk_text = f"[DOMAIN: {self.domain}]\n" + chunk_text
+                # translate whole chunk as single item to preserve markers ordering
+                out = self.translate_texts([chunk_text])[0]
+                translated_chunks.append(out)
+                # update progress if provided
+                done += sum(1 for _ in ch)
+                if progress_callback:
+                    progress_callback(min(done, total), total)
+
+            combined = "".join(translated_chunks)
+            # regex to extract marker and following content until next marker or end
+            # supports SEG{idx} and SEG{idx}_SUB{n}
+            pattern = re.compile(r"\|\|\|SEG(\d+)(?:_SUB(\d+))?\|\|\|\s*(.*?)\s*(?=(\|\|\|SEG\d+(?:_SUB\d+)?\|\||\Z))", re.S)
+            found = list(pattern.finditer(combined))
+
+            # build mapping idx -> {subidx: text} or idx -> {0: text} for no-subparts
+            grouped: Dict[int, Dict[int, str]] = {}
+            for m in found:
+                idx = int(m.group(1))
+                sub = int(m.group(2)) if m.group(2) is not None else 0
+                txt = m.group(3).strip()
+                grouped.setdefault(idx, {})[sub] = txt
+
+            # ensure every subtitle index has at least something
+            if any(i not in grouped for i in range(len(subtitles))):
+                return None
+
+            # construct translated subtitle objects by joining subparts in order
+            import srt as _srt
+            translated_subs = []
+            for i, orig in enumerate(subtitles):
+                parts = grouped.get(i, {0: orig.content})
+                joined = '\n'.join(parts[k] for k in sorted(parts.keys()))
+                text = joined
+                # apply glossary replacements
+                for src, dst in self.glossary.items():
+                    text = text.replace(src, dst)
+
+                translated_subs.append(_srt.Subtitle(
+                    index=orig.index,
+                    start=orig.start,
+                    end=orig.end,
+                    content=text
+                ))
+            return translated_subs
+        except Exception:
+            return None
+
     def translate_srt_file(
         self,
         input_path: str,
@@ -101,29 +210,40 @@ class SRTTranslator:
             
             total_subs = len(subtitles)
             translated_subs = []
-            current_batch = []
-            batch_indices = []
-            
-            for i, sub in enumerate(subtitles):
-                if len(sub.content) > self.max_chars:
-                    logging.warning(f"Subtitle {i} exceeds {self.max_chars} characters")
-                    translated_subs.append(sub)
-                    continue
+
+            # If configured, try full-text mode first
+            if self.translate_mode == 'full':
+                full_result = self._translate_full(subtitles, progress_callback)
+                if full_result is not None:
+                    translated_subs = full_result
+                else:
+                    # fallback to batch processing
+                    logging.info('Full-text translation failed or incomplete; falling back to batch mode')
+
+            if not translated_subs:
+                current_batch = []
+                batch_indices = []
+
+                for i, sub in enumerate(subtitles):
+                    if len(sub.content) > self.max_chars:
+                        logging.warning(f"Subtitle {i} exceeds {self.max_chars} characters")
+                        translated_subs.append(sub)
+                        continue
+                        
+                    current_batch.append(sub.content)
+                    batch_indices.append(i)
                     
-                current_batch.append(sub.content)
-                batch_indices.append(i)
+                    if len(current_batch) >= self.batch_size:
+                        self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
+                        if progress_callback:
+                            progress_callback(len(translated_subs), total_subs)
+                        current_batch = []
+                        batch_indices = []
                 
-                if len(current_batch) >= self.batch_size:
+                if current_batch:
                     self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
                     if progress_callback:
                         progress_callback(len(translated_subs), total_subs)
-                    current_batch = []
-                    batch_indices = []
-            
-            if current_batch:
-                self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
-                if progress_callback:
-                    progress_callback(len(translated_subs), total_subs)
             
             # 写入输出文件
             with open(output_path, 'w', encoding=encoding) as f:

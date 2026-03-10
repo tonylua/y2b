@@ -7,3 +7,4 @@ config/*.json
 .yt-dlp-last-check
 .bilibili-api-last-check
 .claude/
+.tmp*

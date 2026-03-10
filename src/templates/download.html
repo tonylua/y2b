@@ -61,7 +61,8 @@
 let currentVideoId = null;
 let progressInterval = null;
 let notFoundCount = 0;
-const MAX_NOT_FOUND = 10;
+// increase max not-found threshold to avoid false 'not found' during stage transitions
+const MAX_NOT_FOUND = 30;
 
 $(document).ready(function() {
     $.ajax({

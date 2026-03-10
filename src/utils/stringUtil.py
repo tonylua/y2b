@@ -2,6 +2,7 @@ import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse, urlencode, parse_qs, ParseResult
+import unicodedata
 
 def clean_reship_url(url, keep_query_key='v'):
     """
@@ -51,6 +52,61 @@ def cleaned_text(text):
     :return: 清理后的字符串
     """
     return re.sub(r'\s+', ' ', text).strip()
+
+
+def sanitize_title(title: str, max_len: int = 80) -> str:
+    """
+    Clean and truncate a title to be safe for display/storage.
+
+    - Collapse whitespace, strip control characters
+    - Truncate to `max_len` characters (no added ellipsis)
+    - If result is empty, return a fallback 'Untitled'
+    """
+    if not title:
+        return 'Untitled'
+    # collapse whitespace
+    t = cleaned_text(title)
+    # remove non-printable/control characters
+    t = re.sub(r'[\x00-\x1f\x7f]', '', t)
+    # optional: remove unusual long runs of punctuation
+    t = re.sub(r'[\r\n]+', ' ', t)
+    if not t:
+        return 'Untitled'
+    if len(t) > max_len:
+        return t[:max_len]
+    return t
+
+
+def sanitize_title_for_bilibili(title: str, max_len: int = 80) -> str:
+    """More robust sanitizer tailored for bilibili VideoMeta:
+    - Normalize Unicode (NFKC)
+    - Collapse whitespace and remove control chars
+    - Collapse long punctuation runs
+    - If too long, perform middle-truncation to preserve head and tail
+    """
+    if not title:
+        return 'Untitled'
+    # Unicode normalize
+    t = unicodedata.normalize('NFKC', title)
+    t = cleaned_text(t)
+    t = re.sub(r'[\x00-\x1f\x7f]', '', t)
+    t = re.sub(r'[\r\n]+', ' ', t)
+    # collapse long punctuation runs like '!!!' or '。。。' into single char
+    t = re.sub(r'([!\?\.,。！？，；:：\-–—_])\1{2,}', r"\1", t)
+    # trim
+    t = t.strip()
+    if not t:
+        return 'Untitled'
+    if len(t) <= max_len:
+        return t
+    # smart middle truncation: keep head and tail
+    if max_len <= 10:
+        return t[:max_len]
+    head = int(max_len * 0.6)
+    tail = max_len - head - 3
+    if tail < 0:
+        tail = 0
+    return t[:head] + '...' + t[-tail:] if tail else t[:max_len-3] + '...'
 
 def add_suffix_to_filename(file_path, suffix):
     """

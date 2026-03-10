@@ -16,17 +16,46 @@ from .upload import do_upload
 
 
 async def run_yt_dlp(session, url, video_id, ydl_opts, final_save_path, temp_save_path):
-    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 0, '开始下载视频')
+    # keep prior progress value when entering downloading stage to avoid visible reset
+    existing = download_progress.get_progress(video_id)
+    existing_pct = existing.get('progress', 0) if existing else 0
+    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, existing_pct, '开始下载视频')
     
     if os.path.exists(final_save_path):
         print("文件已存在，跳过下载")
         download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 100, '使用已存在的视频文件')
     else:
-        with YoutubeDL(ydl_opts) as ydl:
+        # attach a progress hook so we can update UI with percent during download
+        def _ydl_progress_hook(d):
+            try:
+                status = d.get('status')
+                if status == 'downloading':
+                    total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+                    downloaded = d.get('downloaded_bytes') or 0
+                    percent = int(downloaded * 100 / total) if total else 0
+                    eta = d.get('eta')
+                    speed = d.get('speed')
+                    msg = ''
+                    if eta is not None:
+                        msg = f"ETA {eta}s"
+                    elif speed:
+                        msg = f"{speed} B/s"
+                    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, percent, msg)
+                elif status == 'finished':
+                    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 100, 'yt-dlp: finished')
+            except Exception:
+                pass
+
+        local_opts = dict(ydl_opts) if ydl_opts else {}
+        hooks = list(local_opts.get('progress_hooks') or [])
+        hooks.append(_ydl_progress_hook)
+        local_opts['progress_hooks'] = hooks
+
+        with YoutubeDL(local_opts) as ydl:
             print("开始下载...", video_id)
             try:
                 ydl.download([url])
-                
+
                 if os.path.exists(temp_save_path):
                     os.rename(temp_save_path, final_save_path)
                     print(f"文件已重命名: {temp_save_path} -> {final_save_path}")
@@ -112,7 +141,9 @@ def download_controller(session, url):
                 download_progress.update_stage(temp_id, DownloadStage.FETCHING_INFO, 5, '正在获取视频信息...')
                 info = get_youtube_info(video_url)
                 orig_id = info["id"]
-                current_session['origin_title'] = info["title"]
+                from utils.stringUtil import sanitize_title
+                safe_title = sanitize_title(info.get("title", ""))
+                current_session['origin_title'] = safe_title
                 current_session['origin_id'] = orig_id
                 current_session['origin_file_size'] = info["file_size"]
                 print("获取了视频标题等...", info)
@@ -147,7 +178,7 @@ def download_controller(session, url):
                         origin_url=video_url,
                         save_path=final_save_path,
                         save_srt=save_srt,
-                        title=info["title"],
+                        title=safe_title,
                         subtitle_lang=need_subtitle
                     )
                     db.update_video(video_id, status=VideoStatus.DOWNLOADING)
