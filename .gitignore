@@ -8,3 +8,4 @@ config/*.json
 .bilibili-api-last-check
 .claude/
 .tmp*
+*.bak

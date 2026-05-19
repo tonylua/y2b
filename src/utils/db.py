@@ -69,8 +69,8 @@ class VideoDB(BaseORM):
     def list_videos(self, user):
         """列出所有视频记录"""
         with self.transaction():
-            query = f"SELECT * FROM {self.table_name} WHERE user = {user};"
-            self.cursor.execute(query)
+            query = f"SELECT * FROM {self.table_name} WHERE user = ?;"
+            self.cursor.execute(query, (user,))
             # return self.cursor.fetchall()
             return [dict(row) for row in self.cursor.fetchall()]  # 转换为字典列表
 
