@@ -16,6 +16,31 @@
 
 - winget install "FFmpeg (Essentials Build)"
 
+## CLI
+
+命令行工具，用于下载 YouTube 视频、添加字幕、上传到 Bilibili。
+
+```bash
+# 1. 下载视频（返回 video_id）
+python cli/download.py <youtube_url>
+
+# 2. 添加双语字幕（下载+翻译+嵌入）
+python cli/subtitle.py <video_id>
+
+# 3. 上传到 Bilibili
+python cli/upload.py <video_id>
+```
+
+典型流程：
+
+```bash
+python cli/download.py "https://www.youtube.com/watch?v=xxxxx"
+# 输出: 完成! video_id=42
+
+python cli/subtitle.py 42
+python cli/upload.py 42
+```
+
 ## Docker
 
 ```
