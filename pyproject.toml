@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "bilibili-api-python==17.4.1",
+    "bilibili-api-python==17.4.2",
     "flask[async]==3.0.0",
     "flask-wtf==1.2.1",
     "requests==2.32.2",
