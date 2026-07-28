@@ -10,7 +10,10 @@ from .retry_decorator import retry
 from .db import VideoDB
 from .stringUtil import add_suffix_to_filename, abs_to_rel
 from .sys import run_cli_command, get_video_duration
-from .translate_srt import SRTTranslator
+from .translate_srt import SRTTranslator, merge_srt_files as _merge_srt_files
+
+EN_LANGS = ['en', 'en-US', 'en-GB']
+CN_LANGS = ['zh-Hans', 'zh-CN', 'zh', 'zh-Hant', 'zh-TW']
 
 
 def _is_probably_translated_srt(path: str, sample_lines: int = 200) -> bool:
@@ -334,94 +337,164 @@ def fix_subtitle_path(path: str, lang: str):
         return path
 
 
+def _lang_kind(lang_code: str) -> str:
+    """把具体语言代码归类为 'en' / 'cn' / 其它。"""
+    lc = (lang_code or '').lower()
+    if lc.startswith('en'):
+        return 'en'
+    if lc.startswith('zh'):
+        return 'cn'
+    return lang_code
+
+
+def _srt_base(path: str) -> str:
+    """去掉 .srt 以及可能存在的 .<lang> 后缀，得到基础路径。
+    例如 a/b/ID.en.srt -> a/b/ID ；a/b/ID.srt -> a/b/ID 。
+    """
+    base = path[:-4] if path.lower().endswith('.srt') else path
+    base = re.sub(r'\.[a-zA-Z\-]+$', '', base)
+    return base
+
+
+def _write_transcript_srt(transcript, out_path: str) -> str:
+    fetched = transcript.fetch()
+    srt_content = SRTFormatter().format_transcript(fetched)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write(srt_content)
+    return out_path
+
+
+def _download_track(
+    video_id: str,
+    save_path: str,
+    languages: List[str],
+    update_progress: Callable[[int, str], None],
+) -> Dict[str, str] | bool:
+    """尽力“下载”某一语言的字幕（不翻译）。
+
+    先用 YouTubeTranscriptApi，失败再回退 yt-dlp / youtube-dl。
+    返回 {'lang': 'en'|'cn'|<code>, 'path': ...}，全部失败返回 False。
+    """
+    base = _srt_base(save_path)
+    try:
+        ytt_api = YouTubeTranscriptApi()
+        transcript = ytt_api.list(video_id).find_transcript(languages)
+        code = transcript.language_code
+        out_path = f"{base}.{code}.srt"
+        _write_transcript_srt(transcript, out_path)
+        print(f"字幕下载成功(API) [{code}]: {out_path}")
+        return {'lang': _lang_kind(code), 'path': out_path, 'code': code}
+    except Exception as e:
+        print(f"YouTubeTranscriptApi 获取失败（{languages}），回退 yt-dlp: {e}")
+
+    fallback_path = _yt_dlp_download_subtitles(video_id, save_path, languages)
+    if not fallback_path:
+        return False
+    m = re.search(r"\.(?P<lang>[a-zA-Z\-]+)\.srt$", os.path.basename(fallback_path))
+    code = m.group('lang') if m else (languages[0] if languages else '')
+    print(f"字幕下载成功(yt-dlp) [{code}]: {fallback_path}")
+    return {'lang': _lang_kind(code), 'path': fallback_path, 'code': code}
+
+
+def translate_and_merge(
+    primary: Dict[str, str],
+    make_bilingual: bool,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> Dict[str, str]:
+    """在下载不到目标语言时，用本地模型翻译（并按需合并成双语）。
+
+    primary: {'lang','path','code'} 已下载到的字幕（通常是英文）。
+    make_bilingual: True 生成双语（原文+译文合并），False 只输出译文。
+    仅在调用方确认允许使用模型后才应调用本函数。
+    """
+    def update_progress(percent: int, message: str):
+        if progress_callback:
+            progress_callback(percent, message)
+
+    src_path = primary['path']
+    src_kind = primary['lang']
+    # 目前本地模型是 en->zh，翻译目标固定为中文
+    other = 'cn' if src_kind == 'en' else 'en'
+    base = _srt_base(src_path)
+    translated_path = f"{base}.{other}.srt"
+
+    update_progress(29, '正在用模型翻译字幕...')
+    translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
+    translator.translate_srt_file(src_path, translated_path)
+
+    if not make_bilingual:
+        return {'lang': other, 'path': translated_path, 'code': other}
+
+    merged_path = f"{base}.{primary.get('code', src_kind)}_{other}.srt"
+    en_path = src_path if src_kind == 'en' else translated_path
+    cn_path = translated_path if src_kind == 'en' else src_path
+    _merge_srt_files(en_path, cn_path, merged_path)
+    print(f"字幕已翻译并合并为双语: {merged_path}")
+    return {'lang': 'bilingual', 'path': merged_path, 'code': f"{primary.get('code', src_kind)}_{other}"}
+
+
 def download_subtitles(
     video_id: str,
     save_path: str,
     need_subtitle: str,
-    progress_callback: Optional[Callable[[int, str], None]] = None
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+    allow_translate: bool = True,
 ) -> Dict[str, str] | bool:
     def update_progress(percent: int, message: str):
         if progress_callback:
             progress_callback(percent, message)
 
-    languages = ['en']
+    # ---- 第一步：尽可能“下载”字幕，优先尝试目标语言，失败再多试几个来源 ----
+    # 主语言优先级：cn 模式先找中文，其它模式先找英文。
     if need_subtitle == 'cn':
-        languages = ['zh-Hans', 'zh-CN', 'en']
-    elif need_subtitle in ('bilingual', 'both'):
-        languages = ['en', 'zh-Hans', 'zh-CN']
-    print(need_subtitle, '-->', languages)
+        primary_langs = CN_LANGS + EN_LANGS
+    else:
+        primary_langs = EN_LANGS + CN_LANGS
 
-    ytt_api = YouTubeTranscriptApi()
-    transcript = None
-    try:
-        update_progress(29, '正在查找字幕...')
-        transcript = ytt_api.list(video_id).find_transcript(languages)
-        print("find_generated_transcript", transcript.language_code);
-    except Exception as e:
-        print("YouTubeTranscriptApi 获取失败（可能是网络/SSL问题）:", e)
-        update_progress(29, '使用yt-dlp下载字幕...')
-        fallback_path = _yt_dlp_download_subtitles(video_id, save_path, languages)
-        if not fallback_path:
-            print('yt-dlp 回退下载失败')
-            return False
-        print('yt-dlp 回退下载成功:', fallback_path)
-        m = re.search(r"\.(?P<lang>[a-zA-Z\-]+)\.srt$", os.path.basename(fallback_path))
-        transcript_lang = m.group('lang') if m else ''
-        tmp_path = fallback_path
-        lang = 'en' if transcript_lang == 'en' else ('cn' if 'zh' in transcript_lang else transcript_lang)
-        fixed_path = tmp_path
-        if need_subtitle in ('bilingual', 'both') and lang != 'bilingual':
-            other_lang = 'cn' if transcript_lang == 'en' else 'en'
-            translated_path = tmp_path.replace(f'.{transcript_lang}.srt', f'.{other_lang}.srt')
-            try:
-                update_progress(29, '正在翻译字幕...')
-                translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
-                translator.translate_srt_file(tmp_path, translated_path)
-                merged_path = tmp_path.replace(f'.{transcript_lang}.srt', f'.{transcript_lang}_{other_lang}.srt')
-                translator.merge_srt_files(tmp_path, translated_path, merged_path)
-                fixed_path = merged_path
-                lang = 'bilingual'
-            except Exception as e2:
-                print('回退时翻译或合并失败', e2)
-        return {'lang': lang, 'path': fixed_path}
-
-    base_with_lang = fix_subtitle_path(save_path, transcript.language_code)
-    if not re.search(rf"\.{transcript.language_code}\.srt$", base_with_lang, re.IGNORECASE):
-        base_with_lang = base_with_lang.replace('.srt', f'.{transcript.language_code}.srt')
-
-    tmp_path = base_with_lang
-    lang = 'en' if transcript.language_code == 'en' else 'cn'
-    print("fix_subtitle_path", tmp_path);
     update_progress(29, '正在下载字幕...')
-    fetched_transcript = transcript.fetch()
-    srt_content = SRTFormatter().format_transcript(fetched_transcript)
-    with open(tmp_path, 'w', encoding='utf-8') as f:
-        f.write(srt_content)
-    print("srt downloaded by YouTubeTranscriptApi", tmp_path)
-    fixed_path = tmp_path
+    primary = _download_track(video_id, save_path, primary_langs, update_progress)
+    if not primary:
+        print('所有下载方式均未获取到字幕')
+        return False
 
-    if need_subtitle == 'bilingual' or need_subtitle == 'both':
-        other_lang = 'cn' if transcript.language_code == 'en' else 'en'
-        translated_path = tmp_path.replace(f'.{transcript.language_code}.srt', f'.{other_lang}.srt')
-        update_progress(29, '正在翻译字幕...')
-        translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
-        translator.translate_srt_file(tmp_path, translated_path)
-        merged_path = tmp_path.replace(f'.{transcript.language_code}.srt', f'.{transcript.language_code}_{other_lang}.srt')
-        translator.merge_srt_files(tmp_path, translated_path, merged_path)
-        print("srt translated and merged for bilingual", merged_path)
-        fixed_path = merged_path
-        lang = 'bilingual'
-    elif need_subtitle != transcript.language_code:
-        fixed_path = tmp_path.replace(f'.{transcript.language_code}.srt', f'.{need_subtitle}.srt')
-        lang = need_subtitle
-        update_progress(29, '正在翻译字幕...')
-        translator = SRTTranslator()
-        translator.translate_srt_file(tmp_path, fixed_path)
-        print("srt translated", fixed_path, transcript.language_code, need_subtitle)
-    return {
-        'lang': lang,
-        'path': fixed_path
-    }
+    # 只要单语：直接返回，或已是目标语言
+    if need_subtitle == 'en':
+        if primary['lang'] == 'en':
+            return primary
+        # 拿到的不是英文，且下载不到英文 —— 需要翻译
+        if not allow_translate:
+            return {**primary, 'need_translate': True, 'target': 'en', 'make_bilingual': False}
+        return translate_and_merge(primary, make_bilingual=False, progress_callback=progress_callback)
+
+    if need_subtitle == 'cn':
+        if primary['lang'] == 'cn':
+            return primary
+        if not allow_translate:
+            return {**primary, 'need_translate': True, 'target': 'cn', 'make_bilingual': False}
+        return translate_and_merge(primary, make_bilingual=False, progress_callback=progress_callback)
+
+    # ---- 双语：尝试直接下载另一种语言的字幕并合并（不走模型）----
+    if need_subtitle in ('bilingual', 'both'):
+        other_langs = CN_LANGS if primary['lang'] == 'en' else EN_LANGS
+        update_progress(29, '正在下载另一语言字幕...')
+        secondary = _download_track(video_id, save_path, other_langs, update_progress)
+
+        if secondary and secondary['lang'] != primary['lang']:
+            en_track = primary if primary['lang'] == 'en' else secondary
+            cn_track = secondary if primary['lang'] == 'en' else primary
+            base = _srt_base(en_track['path'])
+            merged_path = f"{base}.{en_track.get('code', 'en')}_{cn_track.get('code', 'cn')}.srt"
+            _merge_srt_files(en_track['path'], cn_track['path'], merged_path)
+            print('两种语言字幕均下载成功，直接合并为双语:', merged_path)
+            return {'lang': 'bilingual', 'path': merged_path,
+                    'code': f"{en_track.get('code', 'en')}_{cn_track.get('code', 'cn')}"}
+
+        # 下载不到另一种语言 —— 需要用模型翻译后合并
+        if not allow_translate:
+            return {**primary, 'need_translate': True, 'target': 'cn', 'make_bilingual': True}
+        return translate_and_merge(primary, make_bilingual=True, progress_callback=progress_callback)
+
+    return primary
 
 
 def _yt_dlp_download_subtitles(video_id: str, save_path: str, languages: List[str]) -> str | bool:
