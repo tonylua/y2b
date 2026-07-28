@@ -25,14 +25,30 @@ def load_app_accounts() -> List[Dict[str, Any]]:
         accounts_data = json.load(file)
     return accounts_data['users']
 
+def base_ydl_opts():
+    """
+    yt-dlp 的基础配置，供信息提取与下载共用。
+
+    - js_runtimes: 指定 JS 运行时。新版 yt-dlp 提取 YouTube 需要 JS 运行时来解
+      challenge，缺失时会退化到弱客户端并误报 "This video is not available"。
+      保留 deno 作默认，追加复用系统已有的 node。
+    - remote_components: 启用 ejs 远程 solver 脚本（从 GitHub 拉取并缓存），
+      配合运行时求解 n-challenge，否则部分格式缺失。
+    """
+    return {
+        'js_runtimes': {'deno': {'path': None}, 'node': {'path': None}},
+        'remote_components': ['ejs:github'],
+    }
+
+
 def get_youtube_info(video_url):
     """
     从YouTube视频URL中提取信息，包括视频链接、ID和标题（清理多余空格后）。
-    
+
     :param video_url: YouTube视频的URL
     :return: 包含视频信息的字典，键为'url', 'id', 'title'
     """
-    with YoutubeDL() as ydl: 
+    with YoutubeDL(base_ydl_opts()) as ydl:
         info_dict = ydl.extract_info(video_url, download=False)
         url = info_dict.get("url", None)
         video_id = info_dict.get("id", None)

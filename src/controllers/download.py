@@ -7,7 +7,7 @@ from flask import request, redirect, url_for, render_template, flash, jsonify
 from yt_dlp import YoutubeDL
 from forms.download import YouTubeDownloadForm
 from utils.stringUtil import clean_reship_url
-from utils.account import AccountUtil, get_youtube_info
+from utils.account import AccountUtil, get_youtube_info, base_ydl_opts
 from utils.constants import Route, VideoStatus, DownloadStage
 from utils.sys import join_root_path, clean_temp_files
 from utils.db import VideoDB
@@ -154,6 +154,7 @@ def download_controller(session, url):
                 save_srt = os.path.join(current_session['save_dir'], f"{orig_id}.{subtitle_locale}.srt") if subtitle_locale else ''
 
                 opts = {
+                    **base_ydl_opts(),
                     'writesubtitles': bool(need_subtitle),
                     'subtitleslangs': [subtitle_locale],
                     'writesubtitlesformat': 'srt' if need_subtitle else None,

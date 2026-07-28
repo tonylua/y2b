@@ -9,7 +9,7 @@ from common import setup_path, get_project_root, cli_progress, cli_progress_done
 
 setup_path()
 
-from utils.account import get_youtube_info
+from utils.account import get_youtube_info, base_ydl_opts
 from utils.stringUtil import sanitize_title, clean_reship_url
 from utils.db import VideoDB
 from utils.constants import VideoStatus
@@ -19,6 +19,15 @@ def main():
     parser = argparse.ArgumentParser(description='下载 YouTube 视频')
     parser.add_argument('url', help='YouTube 视频 URL')
     args = parser.parse_args()
+
+    # 与 src/index.py 一致：追新 yt-dlp 以躲避 YouTube bot 检测。
+    # upgrade_yt_dlp 自带每日节流（.yt-dlp-last-check），不会每次都跑网络。
+    try:
+        from upgrade_yt_dlp import main as upgrade_yt_dlp_main
+        print("正在检查 yt-dlp 版本...")
+        upgrade_yt_dlp_main()
+    except Exception as e:
+        print(f"yt-dlp 升级检查失败: {e}")
 
     url = clean_reship_url(args.url)
     resolution = '1080'
@@ -52,6 +61,7 @@ def main():
                 cli_progress_done()
 
         opts = {
+            **base_ydl_opts(),
             'outtmpl': temp_save_path,
             'format': f"bv*[height<={resolution}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
             'continuedl': True,

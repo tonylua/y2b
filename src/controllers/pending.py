@@ -1,11 +1,13 @@
 from flask import Flask, jsonify
 import yt_dlp
+from utils.account import base_ydl_opts
 
-def fetch_pending_list(): 
+def fetch_pending_list():
     url = 'https://www.youtube.com/playlist?list=PLVqKV0TGDQZdJCPzLHfUNObyeHVeSGddU'
-    
+
     # Set up yt-dlp options to only get video titles
     ydl_opts = {
+        **base_ydl_opts(),
         'skip_download': True,
         'writesubtitles': False,
         'writeinfojson': False,
