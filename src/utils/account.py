@@ -38,6 +38,8 @@ def base_ydl_opts():
     return {
         'js_runtimes': {'deno': {'path': None}, 'node': {'path': None}},
         'remote_components': ['ejs:github'],
+        # 并发下载 DASH 分片，绕开单连接限速提速；8 为稳妥值，过高可能触发更激进限速
+        'concurrent_fragment_downloads': 8,
     }
 
 
