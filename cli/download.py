@@ -10,7 +10,7 @@ from common import setup_path, get_project_root, cli_progress, cli_progress_done
 setup_path()
 
 from utils.account import get_youtube_info, base_ydl_opts
-from utils.stringUtil import sanitize_title, clean_reship_url
+from utils.stringUtil import sanitize_title, sanitize_filename, clean_reship_url
 from utils.db import VideoDB
 from utils.constants import VideoStatus
 
@@ -43,8 +43,17 @@ def main():
         print(f"预估大小: {file_size / 1024 / 1024:.1f} MB")
 
     save_dir = default_save_dir()
-    final_save_path = os.path.join(save_dir, f"{orig_id}.{resolution}.mp4")
-    temp_save_path = os.path.join(save_dir, f"{orig_id}.{resolution}.tmp.mp4")
+    # 以正式标题命名，视频 id 作为方括号后缀附加（保留 id 便于封面匹配与查重）。
+    # 仅当「标题 + id 后缀」总长仍在 max_len 内时才附加 id，否则只用标题。
+    max_len = 80
+    safe_title = sanitize_filename(info.get('title', ''), max_len=max_len)
+    suffix = f" [{orig_id}]"
+    if len(safe_title) + len(suffix) <= max_len:
+        base_name = f"{safe_title}{suffix}"
+    else:
+        base_name = safe_title
+    final_save_path = os.path.join(save_dir, f"{base_name}.{resolution}.mp4")
+    temp_save_path = os.path.join(save_dir, f"{base_name}.{resolution}.tmp.mp4")
 
     if os.path.exists(final_save_path):
         print(f"文件已存在，跳过下载: {final_save_path}")

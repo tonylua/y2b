@@ -77,6 +77,31 @@ def sanitize_title(title: str, max_len: int = 80) -> str:
     return t
 
 
+def sanitize_filename(name: str, max_len: int = 80) -> str:
+    """把标题清洗成可安全用作文件名的字符串（跨 Windows/macOS/Linux）。
+
+    - 折叠空白、去除控制字符
+    - 替换文件系统非法字符 <>:"/\\|?* 为下划线
+    - 去掉结尾的空格/点（Windows 不允许）
+    - 截断到 max_len，空结果回退为 'Untitled'
+    """
+    if not name:
+        return 'Untitled'
+    t = cleaned_text(name)
+    t = re.sub(r'[\x00-\x1f\x7f]', '', t)
+    # 文件系统非法字符
+    t = re.sub(r'[<>:"/\\|?*]', '_', t)
+    # 折叠替换后可能产生的多余空白
+    t = re.sub(r'\s+', ' ', t).strip()
+    # Windows 不允许文件名以空格或点结尾
+    t = t.rstrip(' .')
+    if len(t) > max_len:
+        t = t[:max_len].rstrip(' .')
+    if not t:
+        return 'Untitled'
+    return t
+
+
 def sanitize_title_for_bilibili(title: str, max_len: int = 80) -> str:
     """More robust sanitizer tailored for bilibili VideoMeta:
     - Normalize Unicode (NFKC)
