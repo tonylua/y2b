@@ -1,316 +1,380 @@
+"""LLM-based SRT translator with intelligent sentence segmentation.
+
+核心流程：
+1. 句子重组：合并 YouTube 碎片字幕成完整句子
+2. LLM 翻译：带上下文和术语表
+3. 中文重切：按标点和长度切分
+4. 时间轴重分配：按字数比例
+"""
 from typing import List, Optional, Callable, Dict
 import time
 import logging
 import re
+import json
 
 
-def _parse_time(t: str) -> float:
-    """Parse SRT time format 'HH:MM:SS,mmm' to seconds (float)."""
-    # Remove whitespace
-    t = t.strip()
-    # Accept both ',' and '.' for milliseconds
-    try:
-        hh, mm, ss_ms = t.split(':')
-        ss, ms = ss_ms.replace('.', ',').split(',')
-        return int(hh) * 3600 + int(mm) * 60 + int(ss) + int(ms) / 1000.0
-    except Exception:
-        # fallback simple parse
-        m = re.match(r"(?:(\d+):)?(\d+):(\d+)[,.](\d+)", t)
-        if not m:
-            raise ValueError(f"Invalid SRT time string: {t}")
-        hh = int(m.group(1) or 0)
-        mm = int(m.group(2))
-        ss = int(m.group(3))
-        ms = int(m.group(4))
-        return hh * 3600 + mm * 60 + ss + ms / 1000.0
+class LLMTranslator:
+    """基于 LLM 的字幕翻译器"""
 
-class SRTTranslator:
     def __init__(
         self,
-        model_name: str = "Helsinki-NLP/opus-mt-en-zh",
-        device: Optional[str] = None,
-        batch_size: int = 8,
-        max_chars: int = 4000,
-        translate_mode: str = "batch",
-        domain: Optional[str] = None,
-        glossary: Optional[Dict[str, str]] = None
+        llm_client,
+        glossary: Optional[Dict[str, str]] = None,
+        max_line_chars: int = 40,
+        max_chars: int = 3000,
+        batch_size: int = 5
     ):
         """
-        初始化本地字幕翻译器
-        
+        初始化 LLM 翻译器
+
         参数:
-            model_name: 预训练模型名称/路径
-            device: 指定设备 (None自动检测)
-            batch_size: 翻译批处理大小
-            max_chars: 单条字幕最大字符数
+            llm_client: LLMClient 实例（已初始化）
+            glossary: 术语表
+            max_line_chars: 中文每行最大字符数
+            max_chars: 单句最大字符数（用于断句）
+            batch_size: 批量翻译大小
         """
-        # delayed imports so the module can be loaded without heavy ML deps
-        try:
-            import torch
-            from transformers import MarianMTModel, MarianTokenizer
-        except Exception as e:
-            raise RuntimeError("SRTTranslator requires torch and transformers to be installed") from e
-
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.batch_size = batch_size
-        # max_chars used for chunking when doing full-text translation
-        self.max_chars = max_chars
-        # translate_mode: 'batch' (per-subtitle batches) or 'full' (concatenate then split)
-        self.translate_mode = translate_mode
-        # domain hint to help preserve technical terminology
-        self.domain = domain
-        # optional glossary to apply post-translation replacements {src: dst}
+        self.llm_client = llm_client
         self.glossary = glossary or {}
-        
-        # 初始化模型
-        # imported inside __init__ so unit tests that only use merging don't need heavy packages
-        self.tokenizer = MarianTokenizer.from_pretrained(model_name)
-        self.model = MarianMTModel.from_pretrained(
-            model_name,
-            resume_download=True
-        ).to(self.device)
-        
-        logging.info(f"Initialized translator with {model_name} on {self.device}")
+        self.max_line_chars = max_line_chars
+        self.max_chars = max_chars
+        self.batch_size = batch_size
 
-    def translate_texts(self, texts: List[str]) -> List[str]:
-        """批量翻译文本列表"""
+        logging.info(f"Initialized LLM translator, batch_size={batch_size}")
+
+    def translate_texts(self, texts: List[str], context_sentences: List[str] = None) -> List[str]:
+        """
+        用 LLM 翻译文本列表，带上下文和术语表。
+
+        参数:
+            texts: 要翻译的句子列表
+            context_sentences: 可选，前面的句子上下文（用于术语一致性）
+        """
         if not texts:
             return []
-            
-        inputs = self.tokenizer(
-            texts,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=512
-        ).to(self.device)
-        
-        outputs = self.model.generate(**inputs)
-        return self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
 
-    def _translate_full(self, subtitles: List[object], progress_callback: Optional[Callable[[int, int], None]] = None) -> List[object] | None:
-        """
-        Concatenate subtitle contents with unique markers, translate in chunked blocks,
-        then split translated text back by markers to produce translated subtitles.
-        Returns None on failure to indicate fallback should be used.
-        """
-        import re
+        # 构建术语表提示
+        glossary_hint = ""
+        if self.glossary:
+            terms = [f"{en}: {zh}" for en, zh in list(self.glossary.items())[:20]]
+            glossary_hint = f"\n**术语表（必须遵守）**：\n" + "\n".join(terms) + "\n"
+
+        # 构建上下文提示
+        context_hint = ""
+        if context_sentences:
+            context_hint = "\n**前文上下文（参考，保持术语一致）**：\n" + "\n".join(f"- {s}" for s in context_sentences[-2:]) + "\n"
+
+        # 构建编号句子列表
+        numbered = "\n".join(f"{i+1}. {text}" for i, text in enumerate(texts))
+
+        prompt = f"""你是专业的技术视频字幕翻译员。将以下英文句子翻译成中文，要求：
+1. 符合中文表达习惯，避免机械直译
+2. 保持技术术语一致性
+3. 简洁流畅，适合口播字幕
+{glossary_hint}{context_hint}
+**待翻译句子**：
+{numbered}
+
+**输出格式**：严格的 JSON 对象，键为句子编号（字符串），值为中文翻译：
+{{"1": "第一句中文", "2": "第二句中文", ...}}
+"""
+
         try:
-            # build segments with markers
-            segments = []
-            for i, sub in enumerate(subtitles):
-                segments.append((i, sub.content))
+            response = self.llm_client.chat(
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
+            )
 
-            # chunk segments so each chunk's char length <= max_chars
-            # If a single segment is larger than max_chars, split it into sentence-like subparts
-            chunks = []
-            current = []
-            current_len = 0
-            for idx, content in segments:
-                part = f"|||SEG{idx}|||\n{content}\n"
-                if len(part) > self.max_chars:
-                    # split content into sentence-like pieces (handles Chinese/English punctuation and newlines)
-                    pieces = [p.strip() for p in re.split(r'(?<=[。.!?\n])\s*', content) if p.strip()]
-                    if not pieces:
-                        pieces = [content]
-                    for n, piece in enumerate(pieces):
-                        subpart = f"|||SEG{idx}_SUB{n}|||\n{piece}\n"
-                        if current and (current_len + len(subpart) > self.max_chars):
-                            chunks.append(current)
-                            current = [subpart]
-                            current_len = len(subpart)
-                        else:
-                            current.append(subpart)
-                            current_len += len(subpart)
+            # 解析 JSON 响应
+            translations = json.loads(response)
+
+            # 按编号顺序提取翻译
+            result = []
+            for i in range(len(texts)):
+                key = str(i + 1)
+                if key in translations:
+                    result.append(translations[key])
                 else:
-                    if current and (current_len + len(part) > self.max_chars):
-                        chunks.append(current)
-                        current = [part]
-                        current_len = len(part)
+                    # 降级：返回原文
+                    logging.warning(f"LLM response missing translation for sentence {i+1}")
+                    result.append(texts[i])
+
+            return result
+
+        except Exception as e:
+            logging.error(f"LLM translation failed: {e}")
+            raise
+
+    def _merge_subtitles_to_sentences(self, subtitles: List[object]) -> List[Dict]:
+        """
+        将碎片化的字幕条目按句子边界合并成完整句子。
+
+        合并规则：
+        1. 英文句尾标点 (.!?:) 后强制断句
+        2. 时间间隔超过 1.5 秒断句（说话停顿）
+        3. 大写字母开头 + 前一条以标点结尾 → 新句
+        4. 长度超过 max_chars 强制断句
+
+        返回: [{'text': 完整句子, 'start_sec': 开始秒数, 'end_sec': 结束秒数}]
+        """
+        import srt as _srt
+        from datetime import timedelta
+
+        def to_seconds(td: timedelta) -> float:
+            return td.total_seconds()
+
+        sentences = []
+        current_text = []
+        current_start = None
+        current_end = None
+
+        for i, sub in enumerate(subtitles):
+            start_sec = to_seconds(sub.start)
+            end_sec = to_seconds(sub.end)
+            text = sub.content.strip()
+
+            if not text:
+                continue
+
+            # 初始化第一个句子
+            if current_start is None:
+                current_start = start_sec
+                current_end = end_sec
+                current_text.append(text)
+                continue
+
+            # 判断是否需要断句
+            should_break = False
+            prev_text = current_text[-1] if current_text else ''
+
+            # 规则1：前一条以句尾标点结束
+            if re.search(r'[.!?:]\s*$', prev_text):
+                # 如果当前行以大写开头，很可能是新句
+                if text and text[0].isupper():
+                    should_break = True
+
+            # 规则2：时间间隔超过1.5秒（说话停顿）
+            if start_sec - current_end > 1.5:
+                should_break = True
+
+            # 规则3：累积长度过长
+            combined_len = sum(len(t) for t in current_text) + len(text)
+            if combined_len > self.max_chars:
+                should_break = True
+
+            if should_break and current_text:
+                # 保存当前句子
+                sentences.append({
+                    'text': ' '.join(current_text),
+                    'start_sec': current_start,
+                    'end_sec': current_end
+                })
+                # 开始新句子
+                current_text = [text]
+                current_start = start_sec
+                current_end = end_sec
+            else:
+                # 继续合并
+                current_text.append(text)
+                current_end = end_sec
+
+        # 保存最后一个句子
+        if current_text:
+            sentences.append({
+                'text': ' '.join(current_text),
+                'start_sec': current_start,
+                'end_sec': current_end
+            })
+
+        return sentences
+
+    def _split_chinese_by_length(self, text: str, max_chars: int) -> List[str]:
+        """
+        按中文标点和长度切分文本。
+
+        规则：
+        - 强标点（。！？；…）：达到即断行
+        - 弱标点（，、：）：仅超长时断行
+        - 无标点超长：硬切
+        """
+        # 强标点：达到即断行；弱标点：仅超长时断行
+        strong_punct = '。！？；…'
+        weak_punct = '，、：'
+
+        lines = []
+        current_line = ''
+
+        for char in text:
+            current_line += char
+
+            if char in strong_punct and current_line.strip():
+                # 强标点：一句话结束，断行
+                lines.append(current_line)
+                current_line = ''
+            elif len(current_line) >= max_chars:
+                # 超长处理
+                if char in weak_punct:
+                    # 在弱标点处断行
+                    lines.append(current_line)
+                    current_line = ''
+                elif char in strong_punct:
+                    # 强标点也断（上面已处理）
+                    pass
+                else:
+                    # 找最近的标点，没有就硬切
+                    last_weak = max(
+                        current_line.rfind(p) for p in weak_punct
+                    )
+                    if last_weak > len(current_line) * 0.3:  # 标点在后 70%
+                        lines.append(current_line[:last_weak+1])
+                        current_line = current_line[last_weak+1:]
                     else:
-                        current.append(part)
-                        current_len += len(part)
-            if current:
-                chunks.append(current)
+                        # 硬切
+                        lines.append(current_line)
+                        current_line = ''
 
-            translated_chunks = []
-            total = len(subtitles)
-            done = 0
-            for ch in chunks:
-                chunk_text = "".join(ch)
-                if self.domain:
-                    chunk_text = f"[DOMAIN: {self.domain}]\n" + chunk_text
-                # translate whole chunk as single item to preserve markers ordering
-                out = self.translate_texts([chunk_text])[0]
-                translated_chunks.append(out)
-                # update progress if provided
-                done += sum(1 for _ in ch)
-                if progress_callback:
-                    progress_callback(min(done, total), total)
+        # 处理剩余部分
+        if current_line.strip():
+            lines.append(current_line)
 
-            combined = "".join(translated_chunks)
-            # regex to extract marker and following content until next marker or end
-            # supports SEG{idx} and SEG{idx}_SUB{n}
-            pattern = re.compile(r"\|\|\|SEG(\d+)(?:_SUB(\d+))?\|\|\|\s*(.*?)\s*(?=(\|\|\|SEG\d+(?:_SUB\d+)?\|\||\Z))", re.S)
-            found = list(pattern.finditer(combined))
+        return [line.strip() for line in lines if line.strip()]
 
-            # build mapping idx -> {subidx: text} or idx -> {0: text} for no-subparts
-            grouped: Dict[int, Dict[int, str]] = {}
-            for m in found:
-                idx = int(m.group(1))
-                sub = int(m.group(2)) if m.group(2) is not None else 0
-                txt = m.group(3).strip()
-                grouped.setdefault(idx, {})[sub] = txt
+    def _redistribute_timing(self, lines: List[str], start_sec: float, end_sec: float) -> List[tuple]:
+        """
+        按各行字数比例重新分配时间轴。
 
-            # ensure every subtitle index has at least something
-            if any(i not in grouped for i in range(len(subtitles))):
-                return None
+        返回: [(line_text, line_start, line_end), ...]
+        """
+        if not lines:
+            return []
 
-            # construct translated subtitle objects by joining subparts in order
-            import srt as _srt
-            translated_subs = []
-            for i, orig in enumerate(subtitles):
-                parts = grouped.get(i, {0: orig.content})
-                joined = '\n'.join(parts[k] for k in sorted(parts.keys()))
-                text = joined
-                # apply glossary replacements
-                for src, dst in self.glossary.items():
-                    text = text.replace(src, dst)
+        total_chars = sum(len(line) for line in lines)
+        if total_chars == 0:
+            return [(line, start_sec, end_sec) for line in lines]
 
-                translated_subs.append(_srt.Subtitle(
-                    index=orig.index,
-                    start=orig.start,
-                    end=orig.end,
-                    content=text
-                ))
-            return translated_subs
-        except Exception:
-            return None
+        duration = end_sec - start_sec
+        result = []
+        current_time = start_sec
+
+        for line in lines:
+            line_duration = (len(line) / total_chars) * duration
+            line_end = current_time + line_duration
+            result.append((line, current_time, line_end))
+            current_time = line_end
+
+        return result
 
     def translate_srt_file(
         self,
         input_path: str,
         output_path: str,
         encoding: str = "utf-8",
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        bilingual: bool = False
     ) -> None:
         """
         翻译整个SRT文件
-        
+
         参数:
             input_path: 输入文件路径
             output_path: 输出文件路径
             encoding: 文件编码
             progress_callback: 进度回调函数 (current, total)
+            bilingual: True 时直接输出中英双语（英文整句 + 中文）
         """
         try:
-            import srt
+            import srt as _srt
+            from datetime import timedelta
+
             with open(input_path, 'r', encoding=encoding) as f:
-                subtitles = list(srt.parse(f.read()))
-            
-            total_subs = len(subtitles)
-            translated_subs = []
+                subtitles = list(_srt.parse(f.read()))
 
-            # If configured, try full-text mode first
-            if self.translate_mode == 'full':
-                full_result = self._translate_full(subtitles, progress_callback)
-                if full_result is not None:
-                    translated_subs = full_result
+            # Step 1: 合并成句子
+            sentences = self._merge_subtitles_to_sentences(subtitles)
+            logging.info(f"Merged {len(subtitles)} subtitle entries into {len(sentences)} sentences")
+
+            # Step 2: 批量翻译句子（带上下文）
+            sentence_texts = [s['text'] for s in sentences]
+            translated_sentences = []
+            context = []  # 维护前文上下文
+
+            for i in range(0, len(sentence_texts), self.batch_size):
+                batch = sentence_texts[i:i + self.batch_size]
+
+                # 翻译时带上前一个 batch 的最后 2 句
+                batch_translated = self.translate_texts(batch, context_sentences=context)
+                translated_sentences.extend(batch_translated)
+
+                # 更新上下文（保留最后 2 句英文）
+                context = sentence_texts[max(0, i + len(batch) - 2):i + len(batch)]
+
+                if progress_callback:
+                    progress_callback(min(i + len(batch), len(sentence_texts)), len(sentence_texts))
+
+            # Step 3 & 4: 中文重切 + 时间轴重分配
+            result_subtitles = []
+            sub_index = 1
+
+            for sent, cn_text in zip(sentences, translated_sentences):
+                # 按中文标点和长度切分
+                cn_lines = self._split_chinese_by_length(cn_text, self.max_line_chars)
+
+                # 按字数比例重新分配时间
+                timed_lines = self._redistribute_timing(cn_lines, sent['start_sec'], sent['end_sec'])
+
+                if bilingual:
+                    # 双语模式：每个句子输出一条，英文整句在上，中文全部内容在下
+                    result_subtitles.append(_srt.Subtitle(
+                        index=sub_index,
+                        start=timedelta(seconds=sent['start_sec']),
+                        end=timedelta(seconds=sent['end_sec']),
+                        content=f"{sent['text']}\n{cn_text}"
+                    ))
+                    sub_index += 1
                 else:
-                    # fallback to batch processing
-                    logging.info('Full-text translation failed or incomplete; falling back to batch mode')
+                    # 纯中文模式：按切分后的行输出
+                    for line_text, line_start, line_end in timed_lines:
+                        result_subtitles.append(_srt.Subtitle(
+                            index=sub_index,
+                            start=timedelta(seconds=line_start),
+                            end=timedelta(seconds=line_end),
+                            content=line_text
+                        ))
+                        sub_index += 1
 
-            if not translated_subs:
-                current_batch = []
-                batch_indices = []
+            logging.info(f"Generated {len(result_subtitles)} subtitle entries ({'bilingual' if bilingual else 'Chinese-only'}) from {len(sentences)} sentences")
 
-                for i, sub in enumerate(subtitles):
-                    if len(sub.content) > self.max_chars:
-                        logging.warning(f"Subtitle {i} exceeds {self.max_chars} characters")
-                        translated_subs.append(sub)
-                        continue
-                        
-                    current_batch.append(sub.content)
-                    batch_indices.append(i)
-                    
-                    if len(current_batch) >= self.batch_size:
-                        self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
-                        if progress_callback:
-                            progress_callback(len(translated_subs), total_subs)
-                        current_batch = []
-                        batch_indices = []
-                
-                if current_batch:
-                    self._process_batch(current_batch, batch_indices, subtitles, translated_subs)
-                    if progress_callback:
-                        progress_callback(len(translated_subs), total_subs)
-            
             # 写入输出文件
             with open(output_path, 'w', encoding=encoding) as f:
-                f.write(srt.compose(translated_subs))
-            
+                f.write(_srt.compose(result_subtitles))
+
             logging.info(f"Translation completed. Output saved to {output_path}")
+
         except KeyboardInterrupt:
             logging.info("\n用户中断了字幕翻译")
             raise
 
-    def _process_batch(
-        self,
-        batch: List[str],
-        indices: List[int],
-        original_subs: List[object],
-        output_subs: List[object]
-    ) -> None:
-        """处理单个翻译批次（类内部方法）"""
-        start_time = time.time()
-        try:
-            translated = self.translate_texts(batch)
-            for idx, text in zip(indices, translated):
-                original = original_subs[idx]
-                # 延迟导入 srt 以便模块可以被测试导入
-                import srt as _srt
-                output_subs.append(_srt.Subtitle(
-                    index=original.index,
-                    start=original.start,
-                    end=original.end,
-                    content=text
-                ))
-            elapsed = time.time() - start_time
-            logging.debug(f"Translated {len(batch)} lines in {elapsed:.2f}s")
-        except Exception as e:
-            logging.error(f"Translation failed: {str(e)}")
-            # 失败时保留原文
-            for idx in indices:
-                output_subs.append(original_subs[idx])
 
-    def merge_srt_files(
-        self,
-        original_path: str,
-        translated_path: str,
-        output_path: str,
-        encoding: str = "utf-8",
-    ) -> None:
-        """
-        将两个 SRT 文件（原文 + 翻译）合并为一个双语 SRT。
+def _parse_time(time_str: str) -> float:
+    """解析 SRT 时间戳为秒数"""
+    parts = time_str.replace(',', ':').split(':')
+    if len(parts) == 4:
+        h, m, s, ms = parts
+        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
+    return 0.0
 
-        每条字幕会把原文和译文放在同一个条目里，用换行分隔。
-        对齐策略：按索引逐条合并；如果长度不一致，会把其中缺失的条目按原样追加。
-        """
-        merge_srt_files(original_path, translated_path, output_path, encoding=encoding)
+
 def merge_srt_files(original_path: str, translated_path: str, output_path: str, encoding: str = "utf-8", align_by: str = "index") -> None:
     """
-    将两个 SRT 文件（原文 + 翻译）合并为一个双语 SRT（模块级函数）。
+    将两个 SRT 文件（原文 + 翻译）合并为一个双语 SRT。
 
-    每条字幕会把原文和译文放在同一个条目里，用换行分隔。对齐策略：按索引逐条合并；
-    如果长度不一致，会把其中缺失的条目按原样追加。
+    每条字幕会把原文和译文放在同一个条目里，用换行分隔。
     """
-    # Minimal SRT merge implementation that does not depend on the external `srt` package.
     def _read_blocks(path: str):
         text = open(path, 'r', encoding=encoding).read().strip()
         if not text:
             return []
 
-        # SRT blocks are usually separated by two newlines; handle CRLF and LF
         blocks = [b.strip() for b in re.split(r"\r?\n\r?\n", text) if b.strip()]
         parsed = []
         for b in blocks:
@@ -320,15 +384,15 @@ def merge_srt_files(original_path: str, translated_path: str, output_path: str, 
             idx = lines[0].strip()
             times = lines[1].strip()
             content = "\n".join(l.rstrip() for l in lines[2:]).strip()
-            # try extract start/end times
+
             start_s, end_s = None, None
             try:
                 start_str, end_str = times.split('-->')
                 start_s = _parse_time(start_str.strip())
                 end_s = _parse_time(end_str.strip())
             except Exception:
-                start_s = None
-                end_s = None
+                pass
+
             parsed.append({'index': idx, 'time': times, 'content': content, 'start': start_s, 'end': end_s})
         return parsed
 
@@ -356,8 +420,8 @@ def merge_srt_files(original_path: str, translated_path: str, output_path: str, 
                 idx = trans['index']
 
             merged_blocks.append({'index': idx, 'time': times, 'content': content})
+
     elif align_by == 'time':
-        # Match by timestamp overlap: for each original, find the translated block with max overlap
         used_t = set()
 
         def overlap(a_start, a_end, b_start, b_end):
@@ -385,7 +449,6 @@ def merge_srt_files(original_path: str, translated_path: str, output_path: str, 
 
             merged_blocks.append({'index': orig['index'], 'time': orig['time'], 'content': content})
 
-        # Add leftover translated blocks that did not match
         for j, tr in enumerate(translated):
             if j in used_t:
                 continue
@@ -398,55 +461,3 @@ def merge_srt_files(original_path: str, translated_path: str, output_path: str, 
             f.write(f"{block['index']}\n")
             f.write(f"{block['time']}\n")
             f.write(f"{block['content']}\n\n")
-
-    
-
-
-def main():
-    """命令行接口，支持翻译和合并两种操作
-
-    用法示例：
-      - 翻译： python translate_srt.py input.srt output.srt
-      - 只翻译： python translate_srt.py --translate-only input.srt output.srt
-      - 合并： python translate_srt.py --merge --translated translated.srt input.srt output.srt --align-by time
-    """
-    import argparse
-    parser = argparse.ArgumentParser(description='Offline SRT Translator / SRT Merger')
-    parser.add_argument('input', nargs='?', help='Input SRT file path (for translate or merge)')
-    parser.add_argument('output', nargs='?', help='Output SRT file path')
-    parser.add_argument('--merge', action='store_true', help='Merge two srt files (original + translated)')
-    parser.add_argument('--translated', help='When using --merge: the translated SRT path')
-    parser.add_argument('--align-by', choices=['index', 'time'], default='index', help='Merge alignment strategy')
-    parser.add_argument('--translate-only', action='store_true', help='Only translate input SRT to output (no merge)')
-    parser.add_argument('--batch_size', type=int, default=8, help='Batch size for translation')
-    parser.add_argument('--model', type=str, default="Helsinki-NLP/opus-mt-en-zh", help='Model name')
-    parser.add_argument('--log', type=str, default="INFO", help='Logging level')
-    args = parser.parse_args()
-
-    logging.basicConfig(level=args.log.upper())
-
-    if args.merge:
-        if not args.input or not args.translated or not args.output:
-            parser.error('for --merge you must provide input, --translated and output')
-        merge_srt_files(args.input, args.translated, args.output, encoding='utf-8', align_by=args.align_by)
-        print(f"Merged {args.input} + {args.translated} -> {args.output} (align_by={args.align_by})")
-        return
-
-    # Default: translate (if input+output provided) or translate-only
-    if not args.input or not args.output:
-        parser.error('input and output are required for translation')
-
-    try:
-        translator = SRTTranslator(
-            model_name=args.model,
-            batch_size=args.batch_size
-        )
-    except RuntimeError as e:
-        print(f"Translator cannot initialize: {e}")
-        raise
-
-    translator.translate_srt_file(args.input, args.output)
-    print(f"Translated {args.input} -> {args.output}")
-
-if __name__ == "__main__":
-    main()

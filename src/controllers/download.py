@@ -92,7 +92,7 @@ def download_controller(session, url):
     user = session['login_name']
 
     try:
-        bili = AccountUtil(config_path=join_root_path("config/bili_cookie.json"))
+        bili = AccountUtil(config_path=join_root_path("config/_bili_cookie.json"))
         bili_cookies = bili.verify_cookie()
         print("bilibili 登录信息有效：%s" % bili_cookies['user_name'])
     except Exception as e:

@@ -37,7 +37,7 @@ def load_bili_cookies(cookie_path=None):
     from utils.account import AccountUtil
     from utils.sys import join_root_path
     if not cookie_path:
-        cookie_path = join_root_path("config/bili_cookie.json")
+        cookie_path = join_root_path("config/_bili_cookie.json")
     bili = AccountUtil(config_path=cookie_path)
     cookies = bili.verify_cookie()
     return cookies

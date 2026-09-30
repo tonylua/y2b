@@ -48,7 +48,47 @@ python cli/subtitle.py 42 -d -y
 
 - `--url` 支持 `watch?v=`、`youtu.be/`、`/shorts/`、`/embed/` 及裸视频 ID。
 - 非交互环境（无法输入）默认**不翻译**，只保留已下载的字幕。
-- 本地翻译模型方向为英译中（en→zh）。
+- 本地翻译模型方向为英译中（en→zh），默认模型 `Helsinki-NLP/opus-mt-tc-big-en-zh`。
+
+### 翻译质量：LLM 智能翻译
+
+字幕翻译使用 LLM（大语言模型），流程为：
+
+1. **重组句子**：把 YouTube 碎片化的字幕条按句尾标点、说话停顿（时间间隔 >1.5s）、大写开头等规则合并成完整英文句子；
+2. **LLM 翻译**：以完整句子为单位翻译，带上下文（前2句）和术语表，避免半句翻译导致的语义割裂；
+3. **中文重切**：按中文标点（强标点断句、弱标点仅超长时断）和长度上限重新切分成适合显示的行；
+4. **时间轴重分配**：把原句时间跨度按各行字数比例重新分配。
+
+双语模式（bilingual）下每个句子输出一条：英文整句在上、中文在下，天然对齐。
+
+### 配置 LLM
+
+**必需配置**：编辑 `config/_llm.json` 填写 API key
+
+```json
+{
+  "enabled": true,
+  "base_url": "https://api.deepseek.com/v1",
+  "api_key": "sk-your-key",
+  "model": "deepseek-chat",
+  
+  "features": {
+    "term_extraction": true,      // 术语自动识别
+    "context_translation": true   // 带上下文翻译
+  }
+}
+```
+
+**支持的服务**：
+- DeepSeek（推荐）：约 ¥0.02/视频（10分钟），质量好
+- OpenAI：兼容 API，修改 `base_url` 和 `model`
+- 其他兼容 OpenAI API 的服务
+
+**成本**：实时显示 token 消耗，翻译完成后显示总成本。
+
+### 术语表
+
+`config/glossary.json` 维护技术术语的固定译法（`{ "英文": "中文" }`，以 `_` 开头的键是注释）。翻译时会在**译文后**做大小写不敏感的强制替换，保证 `array→数组`、`callback→回调` 等术语一致。直接编辑该文件即可增删术语，无需改代码。
 
 ### 程序化调用
 

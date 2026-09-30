@@ -6,12 +6,16 @@ def ensure_file_exists(filepath, content):
     if not os.path.exists(filepath):
         with open(filepath, 'w', encoding='utf-8') as file:
             json.dump(content, file, ensure_ascii=False, indent=4)
+        print(f"Created {filepath}")
+    else:
+        print(f"Already exists: {filepath}")
 
 def main():
-    # 定义配置文件路径和初始内容
-    app_accounts_path = 'config/app_accounts.json'
-    bili_cookie_path = 'config/bili_cookie.json'
-    
+    # 定义配置文件路径和初始内容（敏感配置用 _ 前缀避免误提交）
+    app_accounts_path = 'config/_app_accounts.json'
+    bili_cookie_path = 'config/_bili_cookie.json'
+    llm_config_path = 'config/_llm.json'
+
     # 初始化app_accounts.json的内容
     app_accounts_content = {
         "users": [
@@ -29,12 +33,44 @@ def main():
         "bili_jct": "",
         "buvid3": ""
     }
-    
-    # 确保两个配置文件存在
+
+    # 初始化 llm.json 的内容
+    llm_config_content = {
+        "_comment": "LLM 翻译配置（必需）。填写 api_key 后即可使用",
+        "enabled": True,
+
+        "provider": "deepseek",
+        "base_url": "https://api.deepseek.com/v1",
+        "model": "deepseek-flash",
+        "api_key": "",
+
+        "features": {
+            "term_extraction": True,
+            "context_translation": True,
+            "proofread": False
+        },
+
+        "translation": {
+            "mode": "sentence",
+            "max_line_chars": 40,
+            "temperature": 0.3,
+            "max_tokens": 2048
+        },
+
+        "_usage_note": "填写 api_key 后即可使用。DeepSeek 约 ¥0.02/视频"
+    }
+
+    # 确保所有配置文件存在
     ensure_file_exists(app_accounts_path, app_accounts_content)
     ensure_file_exists(bili_cookie_path, bili_cookie_content)
-    
-    print("配置文件初始化完成。")
+    ensure_file_exists(llm_config_path, llm_config_content)
+
+    print("\n配置文件初始化完成。")
+    print("提示：")
+    print("  - 编辑 config/_app_accounts.json 填写 B站账号密码")
+    print("  - 编辑 config/_bili_cookie.json 填写 cookie（可选，用于上传）")
+    print("  - 编辑 config/_llm.json 填写 API key 启用 LLM 增强（可选）")
+    print("  - config/glossary.json 可根据视频内容添加专业术语")
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,7 @@
 static/video
 db/*.db
 __pycache__
-config/*.json
+config/_*.json
 *venv/
 .session.vim
 .yt-dlp-last-check

@@ -2,7 +2,9 @@ import os
 import re
 import sys
 import glob
+import json
 import subprocess
+import logging
 from typing import Optional, Dict, List, Callable
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import SRTFormatter
@@ -10,10 +12,130 @@ from .retry_decorator import retry
 from .db import VideoDB
 from .stringUtil import add_suffix_to_filename, abs_to_rel
 from .sys import run_cli_command, get_video_duration
-from .translate_srt import SRTTranslator, merge_srt_files as _merge_srt_files
+from .translate_srt import LLMTranslator, merge_srt_files as _merge_srt_files
+from .llm_client import LLMConfig, LLMClient
 
 EN_LANGS = ['en', 'en-US', 'en-GB']
 CN_LANGS = ['zh-Hans', 'zh-CN', 'zh', 'zh-Hant', 'zh-TW']
+
+
+def _load_glossary() -> Dict[str, str]:
+    """从 config/glossary.json 加载术语表（忽略以 _ 开头的元数据键）。"""
+    path = os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'glossary.json')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return {k: v for k, v in data.items() if not k.startswith('_') and isinstance(v, str)}
+    except Exception:
+        return {}
+
+
+def _save_glossary(glossary: Dict[str, str]):
+    """保存术语表到 config/glossary.json，保留注释"""
+    path = os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'glossary.json')
+    try:
+        # 读取现有文件保留注释
+        existing_comments = {}
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            existing_comments = {k: v for k, v in data.items() if k.startswith('_')}
+        except Exception:
+            pass
+
+        # 合并术语表和注释
+        output = {**existing_comments, **glossary}
+
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(output, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.error(f"Failed to save glossary: {e}")
+
+
+def _extract_terms_llm(subtitle_text: str, existing_glossary: Dict[str, str], llm_client: LLMClient) -> Dict[str, str]:
+    """
+    用 LLM 从英文字幕中识别专业术语，返回建议的译法。
+
+    返回格式: {"array": "数组", "React": "React", "callback": "回调"}
+    """
+    # 只取前 3000 字符，避免超 token
+    sample = subtitle_text[:3000]
+
+    prompt = f"""你是专业的技术翻译术语顾问。分析以下英文字幕，识别其中的专业术语（编程语言、框架、库、算法、技术概念、品牌名等）。
+
+对每个术语，判断应该：
+1. 翻译成中文（如 "array" → "数组"）
+2. 保留英文原文（如 "React" → "React", "GitHub" → "GitHub"）
+
+**已有术语表**（这些术语无需重复返回）：
+{json.dumps(existing_glossary, ensure_ascii=False)}
+
+**字幕文本**：
+{sample}
+
+**要求**：
+- 只返回**新发现的**术语（不在已有术语表中的）
+- 输出严格的 JSON 格式：{{"term1": "译文1", "term2": "译文2"}}
+- 如果没有新术语，返回空对象：{{}}
+- 保留原文时，值也写英文原词（如 {{"React": "React"}}）
+"""
+
+    try:
+        response = llm_client.chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response)
+    except Exception as e:
+        logging.error(f"LLM term extraction failed: {e}")
+        return {}
+
+
+def _confirm_new_terms(new_terms: Dict[str, str]) -> Dict[str, str]:
+    """
+    交互确认新术语，返回用户接受的术语。
+
+    交互方式：
+    [1] 全部接受  [2] 逐个确认  [3] 跳过
+    """
+    if not new_terms:
+        return {}
+
+    print(f"\n检测到 {len(new_terms)} 个新术语：")
+    for i, (en, zh) in enumerate(new_terms.items(), 1):
+        print(f"  {i}. {en} → {zh}")
+
+    try:
+        choice = input("\n[1] 全部接受  [2] 逐个确认  [3] 跳过\n选择: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n跳过术语确认")
+        return {}
+
+    if choice == '1':
+        return new_terms
+    elif choice == '2':
+        accepted = {}
+        for en, zh in new_terms.items():
+            try:
+                ans = input(f"  {en} → {zh}  [Y/n/e(编辑)]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\n中断确认")
+                break
+
+            if ans in ('', 'y', 'yes'):
+                accepted[en] = zh
+            elif ans.startswith('e'):
+                try:
+                    custom = input(f"    输入 {en} 的译法: ").strip()
+                    if custom:
+                        accepted[en] = custom
+                except (EOFError, KeyboardInterrupt):
+                    continue
+        return accepted
+    else:
+        print("跳过术语更新")
+        return {}
 
 
 def _is_probably_translated_srt(path: str, sample_lines: int = 200) -> bool:
@@ -193,20 +315,20 @@ def add_subtitle(
             print("需要双语字幕，但现有字幕不是双语，尝试翻译...")
             try:
                 update_progress(26, '正在翻译字幕...')
-                translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
+                glossary = _load_glossary()
+                translator = SRTTranslator(translate_mode='sentence', glossary=glossary)
                 base_path = subtitles_path.rsplit('.', 1)[0]
                 other_lang = 'cn' if '.en.srt' in subtitles_path else 'en'
-                translated_path = f"{base_path.rsplit('.', 1)[0]}.{other_lang}.srt"
-                translator.translate_srt_file(subtitles_path, translated_path)
-                
+
                 merged_path = subtitles_path.replace('.srt', f'_{other_lang}.srt')
                 if '_' not in merged_path:
                     lang_match = re.search(r'\.([a-zA-Z\-]+)\.srt$', subtitles_path)
                     if lang_match:
                         orig_lang = lang_match.group(1)
                         merged_path = subtitles_path.replace(f'.{orig_lang}.srt', f'.{orig_lang}_{other_lang}.srt')
-                
-                translator.merge_srt_files(subtitles_path, translated_path, merged_path)
+
+                # 直接输出双语（sentence 模式内部对齐）
+                translator.translate_srt_file(subtitles_path, merged_path, bilingual=True)
                 subtitles_path = merged_path
                 actual_subtitle_type = 'bilingual'
                 print(f"双语字幕已生成: {merged_path}")
@@ -401,11 +523,10 @@ def translate_and_merge(
     make_bilingual: bool,
     progress_callback: Optional[Callable[[int, str], None]] = None,
 ) -> Dict[str, str]:
-    """在下载不到目标语言时，用本地模型翻译（并按需合并成双语）。
+    """用 LLM 翻译字幕（并按需合并成双语）。
 
     primary: {'lang','path','code'} 已下载到的字幕（通常是英文）。
     make_bilingual: True 生成双语（原文+译文合并），False 只输出译文。
-    仅在调用方确认允许使用模型后才应调用本函数。
     """
     def update_progress(percent: int, message: str):
         if progress_callback:
@@ -413,23 +534,59 @@ def translate_and_merge(
 
     src_path = primary['path']
     src_kind = primary['lang']
-    # 目前本地模型是 en->zh，翻译目标固定为中文
     other = 'cn' if src_kind == 'en' else 'en'
     base = _srt_base(src_path)
-    translated_path = f"{base}.{other}.srt"
 
-    update_progress(29, '正在用模型翻译字幕...')
-    translator = SRTTranslator(translate_mode='full', domain='programming', max_chars=4000)
-    translator.translate_srt_file(src_path, translated_path)
+    # 加载 LLM 配置
+    llm_config = LLMConfig()
+    if not llm_config.enabled:
+        raise RuntimeError(
+            "LLM 翻译未启用。请编辑 config/_llm.json，设置 enabled=true 并填写 api_key。\n"
+            "参考文档：LLM_INTEGRATION.md"
+        )
+
+    # 加载术语表
+    glossary = _load_glossary()
+
+    # 初始化 LLM 客户端
+    llm_client = LLMClient(llm_config)
+
+    # 可选：术语自动识别
+    if llm_config.feature_enabled('term_extraction'):
+        try:
+            print("\n正在识别字幕中的专业术语...")
+            with open(src_path, 'r', encoding='utf-8') as f:
+                subtitle_text = f.read()
+
+            new_terms = _extract_terms_llm(subtitle_text, glossary, llm_client)
+
+            if new_terms:
+                accepted = _confirm_new_terms(new_terms)
+                if accepted:
+                    glossary.update(accepted)
+                    _save_glossary(glossary)
+                    print(f"已添加 {len(accepted)} 个术语到 glossary.json")
+        except Exception as e:
+            logging.warning(f"术语识别失败，继续翻译: {e}")
+
+    update_progress(29, '正在用 LLM 翻译字幕...')
+    print("使用 LLM 翻译（带上下文和术语表）...")
+
+    translator = LLMTranslator(
+        llm_client=llm_client,
+        glossary=glossary
+    )
 
     if not make_bilingual:
+        # 纯译文：按中文重新断句
+        translated_path = f"{base}.{other}.srt"
+        translator.translate_srt_file(src_path, translated_path)
         return {'lang': other, 'path': translated_path, 'code': other}
 
+    # 双语：直接输出中英双语
     merged_path = f"{base}.{primary.get('code', src_kind)}_{other}.srt"
-    en_path = src_path if src_kind == 'en' else translated_path
-    cn_path = translated_path if src_kind == 'en' else src_path
-    _merge_srt_files(en_path, cn_path, merged_path)
-    print(f"字幕已翻译并合并为双语: {merged_path}")
+    translator.translate_srt_file(src_path, merged_path, bilingual=True)
+    print(f"字幕已翻译为双语: {merged_path}")
     return {'lang': 'bilingual', 'path': merged_path, 'code': f"{primary.get('code', src_kind)}_{other}"}
 
 

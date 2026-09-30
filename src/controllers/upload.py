@@ -169,7 +169,7 @@ async def do_upload(session, video_id):
 async def upload_controller(session):
     session['auto_upload'] = '1'
     try:
-        bili = AccountUtil(config_path=join_root_path("config/bili_cookie.json"))
+        bili = AccountUtil(config_path=join_root_path("config/_bili_cookie.json"))
         bili_cookies = bili.verify_cookie()
         session.update(pick(bili_cookies, ["SESSDATA", "bili_jct", "buvid3"]))
     except Exception as e:
