@@ -103,6 +103,43 @@ merge_srt_files('video.en.srt', 'video.cn.srt', 'video.en_cn.srt')
 
 嵌入字幕时字体/样式见 `src/utils/subtitle.py` 的 `prepare_ffmpeg_args`（Windows 会先把 SRT 转为 ASS）。
 
+## 清理旧版本地翻译缓存
+
+2026-09 重构为 LLM-only 翻译（commit 9f6f115）之前，本项目用 MarianMT 本地模型翻译字幕，
+会在机器上留下约 3GB 遗留物：HuggingFace 缓存里的 opus-mt 模型权重 + 项目 venv 里的
+`torch`/`transformers`/`sentencepiece`/`sacremoses`。升级后可用下面任一方式回收。
+
+**推荐：清理脚本**（Windows/Linux 通用，默认 dry-run 预览，加 `--yes` 才执行）：
+
+```bash
+python cleanup_legacy_models.py          # 预览会删什么
+python cleanup_legacy_models.py --yes    # 实际执行
+```
+
+脚本只删两样东西：HF 缓存里 `Helsinki-NLP/opus-mt-en-zh`、`opus-mt-tc-big-en-zh`
+两个模型的目录，以及**本项目 `.venv` 内**的上述 4 个包。HF 缓存里的其他模型、系统
+Python、其他项目的 venv、uv/pip 下载缓存一律不碰。若 `pyproject.toml` 仍声明这些
+依赖（尚未升级的旧部署），脚本会自动中止。
+
+**或手动 one-liner**：
+
+```bash
+# Linux / macOS：删模型权重（尊重 HF_HOME）
+rm -rf "${HF_HOME:-$HOME/.cache/huggingface}/hub/models--Helsinki-NLP--opus-mt-tc-big-en-zh" \
+       "${HF_HOME:-$HOME/.cache/huggingface}/hub/models--Helsinki-NLP--opus-mt-en-zh"
+
+# Windows PowerShell
+Remove-Item -Recurse -Force "$env:USERPROFILE\.cache\huggingface\hub\models--Helsinki-NLP--opus-mt-tc-big-en-zh",
+                            "$env:USERPROFILE\.cache\huggingface\hub\models--Helsinki-NLP--opus-mt-en-zh" -ErrorAction SilentlyContinue
+
+# venv 旧依赖（项目根目录执行；按 pyproject.toml 同步，多余包会被移除）
+uv sync
+```
+
+注意：`uv cache clean` 是全局的，会清掉**其他项目**共用的 torch 轮子（下次要重新
+下载 1GB+），本项目清理不需要它。Docker 部署无需清理——旧镜像是按 requirements.txt
+构建的，用新 Dockerfile 重建镜像即可。
+
 ## Docker
 
 ```bash
