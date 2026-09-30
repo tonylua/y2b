@@ -22,7 +22,8 @@ class LLMTranslator:
         glossary: Optional[Dict[str, str]] = None,
         max_line_chars: int = 40,
         max_chars: int = 3000,
-        batch_size: int = 5
+        batch_size: int = 5,
+        batch_max_chars: int = 1200
     ):
         """
         初始化 LLM 翻译器
@@ -32,39 +33,47 @@ class LLMTranslator:
             glossary: 术语表
             max_line_chars: 中文每行最大字符数
             max_chars: 单句最大字符数（用于断句）
-            batch_size: 批量翻译大小
+            batch_size: 单批最多几句
+            batch_max_chars: 单批最多多少字符（按字符分批，避免输出被 max_tokens 截断）
         """
         self.llm_client = llm_client
         self.glossary = glossary or {}
         self.max_line_chars = max_line_chars
         self.max_chars = max_chars
         self.batch_size = batch_size
+        self.batch_max_chars = batch_max_chars
 
-        logging.info(f"Initialized LLM translator, batch_size={batch_size}")
+        logging.info(f"Initialized LLM translator, batch_size={batch_size}, batch_max_chars={batch_max_chars}")
 
-    def translate_texts(self, texts: List[str], context_sentences: List[str] = None) -> List[str]:
-        """
-        用 LLM 翻译文本列表，带上下文和术语表。
+    def iter_batches(self, texts: List[str]):
+        """按句数和字符数双上限切批，产出 (句下标列表, 字符数)。"""
+        batch: List[int] = []
+        chars = 0
+        for i, text in enumerate(texts):
+            if batch and (chars + len(text) > self.batch_max_chars or len(batch) >= self.batch_size):
+                yield batch, chars
+                batch, chars = [], 0
+            batch.append(i)
+            chars += len(text)
+        if batch:
+            yield batch, chars
 
-        参数:
-            texts: 要翻译的句子列表
-            context_sentences: 可选，前面的句子上下文（用于术语一致性）
-        """
-        if not texts:
-            return []
+    def _max_tokens_for(self, texts: List[str]) -> int:
+        """按输入长度估输出预算：中文译文约为原文 1.5~2 倍，避免输出被截断。"""
+        chars = sum(len(t) for t in texts)
+        return min(8192, max(2048, int(chars * 1.6) + 512))
 
-        # 构建术语表提示
+    def _request_batch(self, texts: List[str], context_sentences: List[str] = None) -> Dict[str, str]:
+        """发一次 LLM 请求，返回 {编号: 译文}。"""
         glossary_hint = ""
         if self.glossary:
             terms = [f"{en}: {zh}" for en, zh in list(self.glossary.items())[:20]]
             glossary_hint = f"\n**术语表（必须遵守）**：\n" + "\n".join(terms) + "\n"
 
-        # 构建上下文提示
         context_hint = ""
         if context_sentences:
             context_hint = "\n**前文上下文（参考，保持术语一致）**：\n" + "\n".join(f"- {s}" for s in context_sentences[-2:]) + "\n"
 
-        # 构建编号句子列表
         numbered = "\n".join(f"{i+1}. {text}" for i, text in enumerate(texts))
 
         prompt = f"""你是专业的技术视频字幕翻译员。将以下英文句子翻译成中文，要求：
@@ -78,32 +87,56 @@ class LLMTranslator:
 **输出格式**：严格的 JSON 对象，键为句子编号（字符串），值为中文翻译：
 {{"1": "第一句中文", "2": "第二句中文", ...}}
 """
+        return self.llm_client.chat_json(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=self._max_tokens_for(texts),
+        )
+
+    def translate_texts(self, texts: List[str], context_sentences: List[str] = None) -> List[str]:
+        """
+        用 LLM 翻译文本列表，带上下文和术语表。
+
+        参数:
+            texts: 要翻译的句子列表
+            context_sentences: 可选，前面的句子上下文（用于术语一致性）
+        """
+        if not texts:
+            return []
 
         try:
-            response = self.llm_client.chat(
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}
-            )
-
-            # 解析 JSON 响应
-            translations = json.loads(response)
-
-            # 按编号顺序提取翻译
-            result = []
-            for i in range(len(texts)):
-                key = str(i + 1)
-                if key in translations:
-                    result.append(translations[key])
-                else:
-                    # 降级：返回原文
-                    logging.warning(f"LLM response missing translation for sentence {i+1}")
-                    result.append(texts[i])
-
-            return result
-
+            translations = self._request_batch(texts, context_sentences)
         except Exception as e:
-            logging.error(f"LLM translation failed: {e}")
-            raise
+            # 整批失败（网络/超长/截断）：退化成逐句翻译，别让一条失败毁掉整个字幕
+            logging.error(f"LLM 批量翻译失败（{len(texts)} 句），逐句重试: {e}")
+            if len(texts) == 1:
+                logging.warning("单句翻译失败，保留原文")
+                return list(texts)
+            return [
+                single[0]
+                for text in texts
+                for single in [self.translate_texts([text], context_sentences=context_sentences)]
+            ]
+
+        # 按编号顺序提取翻译，缺号的单独重翻
+        result: List[Optional[str]] = []
+        missing: List[int] = []
+        for i in range(len(texts)):
+            value = translations.get(str(i + 1))
+            if isinstance(value, str) and value.strip():
+                result.append(value.strip())
+            else:
+                result.append(None)
+                missing.append(i)
+
+        for i in missing:
+            logging.warning(f"第 {i + 1} 句没有拿到译文，单独重翻")
+            try:
+                result[i] = self.translate_texts([texts[i]], context_sentences=context_sentences)[0]
+            except Exception as e:
+                logging.warning(f"第 {i + 1} 句单独重翻失败，保留原文: {e}")
+                result[i] = texts[i]
+
+        return result  # type: ignore[return-value]
 
     def _merge_subtitles_to_sentences(self, subtitles: List[object]) -> List[Dict]:
         """
@@ -298,18 +331,18 @@ class LLMTranslator:
             translated_sentences = []
             context = []  # 维护前文上下文
 
-            for i in range(0, len(sentence_texts), self.batch_size):
-                batch = sentence_texts[i:i + self.batch_size]
+            for indices, batch_chars in self.iter_batches(sentence_texts):
+                batch = [sentence_texts[i] for i in indices]
+                logging.info(f"翻译批次: {len(batch)} 句 / {batch_chars} 字符 (句 {indices[0] + 1}-{indices[-1] + 1})")
 
                 # 翻译时带上前一个 batch 的最后 2 句
-                batch_translated = self.translate_texts(batch, context_sentences=context)
-                translated_sentences.extend(batch_translated)
+                translated_sentences.extend(self.translate_texts(batch, context_sentences=context))
 
                 # 更新上下文（保留最后 2 句英文）
-                context = sentence_texts[max(0, i + len(batch) - 2):i + len(batch)]
+                context = sentence_texts[max(0, indices[-1] - 1):indices[-1] + 1]
 
                 if progress_callback:
-                    progress_callback(min(i + len(batch), len(sentence_texts)), len(sentence_texts))
+                    progress_callback(indices[-1] + 1, len(sentence_texts))
 
             # Step 3 & 4: 中文重切 + 时间轴重分配
             result_subtitles = []
@@ -353,6 +386,61 @@ class LLMTranslator:
         except KeyboardInterrupt:
             logging.info("\n用户中断了字幕翻译")
             raise
+
+
+def has_cjk(text: str) -> bool:
+    """文本里是否含有中日韩字符。"""
+    return bool(re.search(r'[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]', text or ''))
+
+
+def translate_video_title(
+    title: str,
+    llm_client,
+    glossary: Optional[Dict[str, str]] = None,
+    max_len: int = 70,
+) -> str:
+    """用 LLM 把视频标题翻译成中文。
+
+    已经是中文、LLM 不可用或翻译失败时，都返回原标题。
+    """
+    if not title or has_cjk(title):
+        return title
+
+    glossary_hint = ''
+    if glossary:
+        terms = [f"{en}: {zh}" for en, zh in list(glossary.items())[:20]]
+        glossary_hint = "\n**术语表（必须遵守）**：\n" + "\n".join(terms) + "\n"
+
+    prompt = f"""你是 B 站技术区 UP 主的标题编辑。把下面的英文视频标题翻译成中文标题。
+
+要求：
+1. 准确传达原意，符合中文技术圈的表达习惯，可适度润色得更抓人，但不要标题党、不要夸大
+2. 品牌名、框架名、语言名、缩写保留英文原文（如 Rust、Leptos、Dioxus、Next.js、WebAssembly、Topcoat）
+3. 不要加引号、书名号、括号补充说明、不要加 emoji
+4. 不要输出任何解释，只输出 title 字段
+{glossary_hint}
+**原标题**：
+{title}
+
+**输出格式**：严格的 JSON 对象：
+{{"title": "中文标题"}}
+"""
+    try:
+        data = llm_client.chat_json(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=256,
+        )
+        translated = str(data.get('title', '')).strip()
+        translated = re.sub(r'^[\s"\'`《【]+|[\s"\'`》】]+$', '', translated)
+        if not translated or not has_cjk(translated):
+            logging.warning(f"标题翻译结果无效，保留原标题: {translated!r}")
+            return title
+        if len(translated) > max_len:
+            translated = translated[:max_len]
+        return translated
+    except Exception as e:
+        logging.error(f"LLM 标题翻译失败: {e}")
+        return title
 
 
 def _parse_time(time_str: str) -> float:

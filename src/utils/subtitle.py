@@ -13,7 +13,7 @@ from .retry_decorator import retry
 from .db import VideoDB
 from .stringUtil import add_suffix_to_filename
 from .sys import run_cli_command, get_video_duration, get_video_size, join_root_path
-from .translate_srt import LLMTranslator, merge_srt_files as _merge_srt_files
+from .translate_srt import LLMTranslator, merge_srt_files as _merge_srt_files, translate_video_title
 from .llm_client import LLMConfig, LLMClient
 
 EN_LANGS = ['en', 'en-US', 'en-GB']
@@ -82,15 +82,51 @@ def _extract_terms_llm(subtitle_text: str, existing_glossary: Dict[str, str], ll
 """
 
     try:
-        response = llm_client.chat(
+        return llm_client.chat_json(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            response_format={"type": "json_object"}
         )
-        return json.loads(response)
     except Exception as e:
+        # 术语抽取失败不影响主流程，只是少了术语约束
         logging.error(f"LLM term extraction failed: {e}")
         return {}
+
+
+def _maybe_translate_title(title: str, actual_subtitle_type: str) -> str:
+    """中字/双语字幕时把英文标题翻译成中文。
+
+    已经含中文、LLM 未配置、或任何异常，都原样返回（标题翻译失败不影响主流程）。
+    """
+    cleaned = re.sub(r'^(\[.*?\]\s*)+', '', title)
+    if actual_subtitle_type not in ('cn', 'bilingual'):
+        return cleaned
+    if _CJK_PATTERN.search(cleaned):
+        return cleaned  # 已经是中文标题
+    try:
+        cfg = LLMConfig()
+        if not (cfg.enabled and cfg.api_key) or not cfg.feature_enabled('title_translation'):
+            return cleaned
+        print("正在翻译视频标题...")
+        translated = translate_video_title(
+            cleaned,
+            LLMClient(cfg),
+            glossary=_load_glossary(),
+        )
+        if translated and translated != cleaned:
+            print(f"标题已翻译: {cleaned} -> {translated}")
+            return translated
+    except Exception as e:
+        print(f"标题翻译失败，保留原标题: {e}")
+    return cleaned
+
+
+def _llm_enabled() -> bool:
+    """config/_llm.json 里是否配好了可用的 LLM。"""
+    try:
+        cfg = LLMConfig()
+        return bool(cfg.enabled and cfg.api_key)
+    except Exception:
+        return False
 
 
 def _is_interactive() -> bool:
@@ -374,7 +410,7 @@ def add_subtitle(
         try:
             update_progress(30, '正在处理字幕...')
             title_prefix = subtitle_title_map.get(actual_subtitle_type, '转')
-            cleaned_title = re.sub(r'^(\[.*?\]\s*)+', '', title)
+            cleaned_title = _maybe_translate_title(title, actual_subtitle_type)
             title = f"[{title_prefix}] {cleaned_title}"
             # final path with subtitle suffix
             final_with_srt = add_suffix_to_filename(video_path, 'with_srt')
@@ -930,8 +966,15 @@ def download_subtitles(
             return {**primary, 'need_translate': True, 'target': 'cn', 'make_bilingual': False}
         return translate_and_merge(primary, make_bilingual=False, progress_callback=progress_callback)
 
-    # ---- 双语：尝试直接下载另一种语言的字幕并合并（不走模型）----
+    # ---- 双语：优先用 LLM 翻译另一种语言（YouTube 自动翻译的中文质量很差）----
     if need_subtitle in ('bilingual', 'both'):
+        if allow_translate and _llm_enabled():
+            print('检测到 LLM 可用，双语字幕走模型翻译（跳过 YouTube 自动翻译的字幕）')
+            try:
+                return translate_and_merge(primary, make_bilingual=True, progress_callback=progress_callback)
+            except Exception as e:
+                print(f'LLM 翻译失败，回退下载另一语言字幕: {e}')
+
         other_langs = CN_LANGS if primary['lang'] == 'en' else EN_LANGS
         update_progress(29, '正在下载另一语言字幕...')
         secondary = _download_track(video_id, save_path, other_langs, update_progress)
