@@ -429,9 +429,13 @@ def add_subtitle(
             raise
         except (Exception, subprocess.CalledProcessError) as e:
             print('ffmpeg 加字幕过程报错', e)
-            title = f"[转] {title}"
+            # ffmpeg 失败，清除字幕类型前缀，回退到 [转]
+            cleaned = re.sub(r'^(\[.*?\]\s*)+', '', title)
+            title = f"[转] {cleaned}"
     else:
-        title = f"[转] {title}"
+        # 没下载到字幕
+        cleaned = re.sub(r'^(\[.*?\]\s*)+', '', title)
+        title = f"[转] {cleaned}"
         print('设置了字幕但没下载到，跳过字幕嵌入:', subtitles_path)
         subtitles_path = ''
 
