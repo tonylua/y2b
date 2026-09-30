@@ -680,12 +680,17 @@ def _chunk_cue(en_text: str, cn_text: str, max_en: int, max_cn: int) -> List[tup
     """把一条（可能很长的）字幕切成若干块，返回 [(英文, 中文, 权重)]。
 
     权重用于按长度比例重新分配时间轴，避免一条字幕挂 40 秒铺满整屏。
+    max_en/max_cn 现在是单行字符限制，每块最多 2 行。
     """
+    # 每块可以容纳约 2 行（中英各一行，或单语言 2 行）
+    chars_per_chunk_en = max_en * 2
+    chars_per_chunk_cn = max_cn * 2
+
     need = 1
     if en_text:
-        need = max(need, math.ceil(len(en_text) / max_en))
+        need = max(need, math.ceil(len(en_text) / chars_per_chunk_en))
     if cn_text:
-        need = max(need, math.ceil(len(cn_text) / max_cn))
+        need = max(need, math.ceil(len(cn_text) / chars_per_chunk_cn))
 
     en_parts = _split_proportional(en_text, need)
     cn_parts = _split_proportional(cn_text, need)
@@ -726,10 +731,12 @@ def _ass_escape(text: str) -> str:
 
 
 def _max_chars_per_chunk(width: int, font_size: int, cjk: bool) -> int:
-    """按视频宽度估算一块字幕能放多少字符（按 2 行计）。"""
-    usable = width * 0.9
+    """按视频宽度估算单行字幕能放多少字符（保守估算，避免超屏）。"""
+    usable = width * 0.85  # 更保守的可用宽度
     per_char = font_size if cjk else font_size * 0.55
-    return max(8, int(usable / per_char) * 2)
+    chars_per_line = int(usable / per_char)
+    # 返回单行限制，chunk 函数内部会处理多行
+    return max(6, chars_per_line)
 
 
 def build_ass_from_srt(srt_path: str, ass_path: str, width: int, height: int) -> str:
@@ -768,7 +775,7 @@ def build_ass_from_srt(srt_path: str, ass_path: str, width: int, height: int) ->
             if en:
                 parts.append('{\\rEN}' + _ass_escape(en))
             if cn:
-                parts.append('{\\rCN}' + _ass_escape(cn))
+                parts.append('{\\rCN\\q2}' + _ass_escape(cn))  # \q2 强制智能折行
             if not parts:
                 continue
             style = 'CN' if cn else 'EN'
