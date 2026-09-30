@@ -92,50 +92,73 @@ def _extract_terms_llm(subtitle_text: str, existing_glossary: Dict[str, str], ll
         return {}
 
 
+def _is_interactive() -> bool:
+    """判断当前是否为可交互的终端环境（CLI 前台）。
+
+    Web 后台线程 / 非 TTY 环境返回 False，此时术语自动全部接受，不阻塞。
+    """
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
 def _confirm_new_terms(new_terms: Dict[str, str]) -> Dict[str, str]:
     """
-    交互确认新术语，返回用户接受的术语。
+    确认新术语，返回接受的术语。
 
-    交互方式：
-    [1] 全部接受  [2] 逐个确认  [3] 跳过
+    - 交互式终端（CLI）：让用户选择 全部接受 / 逐个确认 / 跳过
+    - 非交互环境（Web 后台）：自动全部接受，不阻塞流程
     """
     if not new_terms:
         return {}
 
-    print(f"\n检测到 {len(new_terms)} 个新术语：")
-    for i, (en, zh) in enumerate(new_terms.items(), 1):
-        print(f"  {i}. {en} → {zh}")
-
-    try:
-        choice = input("\n[1] 全部接受  [2] 逐个确认  [3] 跳过\n选择: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\n跳过术语确认")
-        return {}
-
-    if choice == '1':
+    # 非交互环境：自动接受，避免在 Web 后台线程阻塞等待 stdin
+    if not _is_interactive():
+        print(f"自动接受 {len(new_terms)} 个新术语（非交互环境）: {list(new_terms.keys())}")
         return new_terms
-    elif choice == '2':
-        accepted = {}
-        for en, zh in new_terms.items():
-            try:
-                ans = input(f"  {en} → {zh}  [Y/n/e(编辑)]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print("\n中断确认")
-                break
 
-            if ans in ('', 'y', 'yes'):
-                accepted[en] = zh
-            elif ans.startswith('e'):
+    # 交互时临时压制 werkzeug 访问日志，避免刷屏盖住提示
+    werkzeug_logger = logging.getLogger('werkzeug')
+    original_level = werkzeug_logger.level
+    werkzeug_logger.setLevel(logging.ERROR)
+    try:
+        print(f"\n检测到 {len(new_terms)} 个新术语：")
+        for i, (en, zh) in enumerate(new_terms.items(), 1):
+            print(f"  {i}. {en} → {zh}")
+
+        try:
+            choice = input("\n[1] 全部接受  [2] 逐个确认  [3] 跳过\n选择: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n跳过术语确认")
+            return {}
+
+        if choice == '1':
+            return new_terms
+        elif choice == '2':
+            accepted = {}
+            for en, zh in new_terms.items():
                 try:
-                    custom = input(f"    输入 {en} 的译法: ").strip()
-                    if custom:
-                        accepted[en] = custom
+                    ans = input(f"  {en} → {zh}  [Y/n/e(编辑)]: ").strip().lower()
                 except (EOFError, KeyboardInterrupt):
-                    continue
-        return accepted
-    else:
-        print("跳过术语更新")
-        return {}
+                    print("\n中断确认")
+                    break
+
+                if ans in ('', 'y', 'yes'):
+                    accepted[en] = zh
+                elif ans.startswith('e'):
+                    try:
+                        custom = input(f"    输入 {en} 的译法: ").strip()
+                        if custom:
+                            accepted[en] = custom
+                    except (EOFError, KeyboardInterrupt):
+                        continue
+            return accepted
+        else:
+            print("跳过术语更新")
+            return {}
+    finally:
+        werkzeug_logger.setLevel(original_level)
 
 
 def _is_probably_translated_srt(path: str, sample_lines: int = 200) -> bool:
@@ -315,8 +338,16 @@ def add_subtitle(
             print("需要双语字幕，但现有字幕不是双语，尝试翻译...")
             try:
                 update_progress(26, '正在翻译字幕...')
+
+                # Load LLM config and client
+                llm_config = LLMConfig()
+                if not llm_config.enabled:
+                    raise RuntimeError("LLM 翻译未启用，无法生成双语字幕")
+
+                llm_client = LLMClient(llm_config)
                 glossary = _load_glossary()
-                translator = SRTTranslator(translate_mode='sentence', glossary=glossary)
+                translator = LLMTranslator(llm_client=llm_client, glossary=glossary)
+
                 base_path = subtitles_path.rsplit('.', 1)[0]
                 other_lang = 'cn' if '.en.srt' in subtitles_path else 'en'
 
