@@ -3,7 +3,8 @@ import re
 import glob
 import shutil
 import subprocess
-from typing import List, Dict, Union, Callable, Optional
+import collections
+from typing import List, Dict, Union, Callable, Optional, Tuple
 
 
 def join_root_path(*paths):
@@ -54,9 +55,17 @@ def run_cli_command(
     command_name,
     args_list,
     progress_callback: Optional[Callable[[int, str], None]] = None,
-    total_duration: Optional[float] = None
+    total_duration: Optional[float] = None,
+    tail_lines: int = 40,
 ):
+    """执行命令行并实时打印输出。
+
+    失败时抛出的 CalledProcessError 会带上最后 tail_lines 行输出（output 属性），
+    方便在 Web 后台日志里直接看到 ffmpeg/yt-dlp 的真实报错。
+    """
     cmd = [command_name] + args_list
+    process = None
+    tail = collections.deque(maxlen=tail_lines)
 
     try:
         process = subprocess.Popen(
@@ -71,6 +80,7 @@ def run_cli_command(
 
         for line in process.stdout:
             print(line.strip())
+            tail.append(line.rstrip())
 
             if progress_callback and total_duration and 'frame=' in line:
                 match = time_pattern.search(line)
@@ -85,11 +95,16 @@ def run_cli_command(
 
         exit_code = process.wait()
         if exit_code != 0:
-            raise subprocess.CalledProcessError(exit_code, cmd)
+            err = subprocess.CalledProcessError(exit_code, cmd)
+            err.output = '\n'.join(tail)
+            print(f"{command_name} 执行失败(exit={exit_code})，最后 {len(tail)} 行输出:\n{err.output}")
+            raise err
     finally:
-        process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
+        if process is not None:
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
 
 
 def clear_video_directory(path):
@@ -111,6 +126,24 @@ def get_video_duration(video_path: str) -> Optional[float]:
     except Exception as e:
         print(f"获取视频时长失败: {e}")
     return None
+
+
+def get_video_size(video_path: str) -> Tuple[int, int]:
+    """用 ffprobe 读取视频宽高，失败返回 (0, 0)。"""
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=width,height', '-of', 'csv=s=x:p=0',
+             video_path],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            w, h = result.stdout.strip().split('x')[:2]
+            return int(w), int(h)
+    except Exception as e:
+        print(f"获取视频分辨率失败: {e}")
+    return 0, 0
 
 
 def get_file_size(file_path: str) -> str:
