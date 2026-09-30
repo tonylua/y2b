@@ -15,6 +15,7 @@ def main():
     app_accounts_path = 'config/_app_accounts.json'
     bili_cookie_path = 'config/_bili_cookie.json'
     llm_config_path = 'config/_llm.json'
+    upload_config_path = 'config/_upload.json'
 
     # 初始化app_accounts.json的内容
     app_accounts_content = {
@@ -60,16 +61,25 @@ def main():
         "_usage_note": "填写 api_key 后即可使用。DeepSeek 约 ¥0.02/视频"
     }
 
+    # 初始化 upload.json 的内容
+    upload_config_content = {
+        "_comment": "上传配置（本机生效，不入库）。上传成功后自动把视频加入指定合集（新版合集/SEASON）。season_id 优先，按 id 找不到时再用 season_title 兜底；两者都留空则不启用。合集列表可用 python cli/seasons.py 查看。",
+        "season_id": 0,
+        "season_title": ""
+    }
+
     # 确保所有配置文件存在
     ensure_file_exists(app_accounts_path, app_accounts_content)
     ensure_file_exists(bili_cookie_path, bili_cookie_content)
     ensure_file_exists(llm_config_path, llm_config_content)
+    ensure_file_exists(upload_config_path, upload_config_content)
 
     print("\n配置文件初始化完成。")
     print("提示：")
     print("  - 编辑 config/_app_accounts.json 填写 B站账号密码")
     print("  - 编辑 config/_bili_cookie.json 填写 cookie（可选，用于上传）")
     print("  - 编辑 config/_llm.json 填写 API key 启用 LLM 增强（可选）")
+    print("  - 编辑 config/_upload.json 设置上传后自动加入的合集（可选）")
     print("  - config/glossary.json 可根据视频内容添加专业术语")
 
 if __name__ == "__main__":

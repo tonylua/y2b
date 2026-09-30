@@ -112,6 +112,11 @@ async def do_upload(session, video_id):
             description=desc
         )
         uploader = video_uploader.VideoUploader([page], vu_meta, credential)
+        bili_cookies = {
+            'SESSDATA': session['SESSDATA'],
+            'bili_jct': session['bili_jct'],
+            'buvid3': session['buvid3'],
+        }
 
         @uploader.on("__ALL__")
         async def ev(data, args=db_update_args):
@@ -121,6 +126,17 @@ async def do_upload(session, video_id):
                 db.update_video(video_id, **args)
                 download_progress.complete_progress(video_id)
                 print('上传完成', data)
+                # 按配置把视频加入合集（config/_upload.json；未配置则静默跳过）
+                try:
+                    ep_data = data.get('data') or ()
+                    result = ep_data[0] if ep_data and isinstance(ep_data[0], dict) else {}
+                    from utils.bili_season import add_to_season_from_config
+                    ok, msg = add_to_season_from_config(
+                        bili_cookies, result.get('aid'), result.get('bvid'), title)
+                    if msg:
+                        print('合集:', '成功' if ok else '失败', '-', msg)
+                except Exception as e:
+                    print(f'加入合集失败(不影响上传结果): {e}')
             elif data['name'] == VideoUploaderEvents.FAILED.value:
                 args["status"] = VideoStatus.ERROR
                 db.update_video(video_id, **args)

@@ -75,6 +75,17 @@ async def do_cli_upload(record, cookies):
             cli_progress(100, '上传完成')
             cli_progress_done()
             db.update_video(video_id, status=VideoStatus.UPLOADED, title=title, desc=desc, tid=tid, tags=tags)
+            # 按配置把视频加入合集（config/_upload.json；未配置则静默跳过）
+            try:
+                ep_data = data.get('data') or ()
+                result = ep_data[0] if ep_data and isinstance(ep_data[0], dict) else {}
+                from utils.bili_season import add_to_season_from_config
+                ok, msg = add_to_season_from_config(
+                    cookies, result.get('aid'), result.get('bvid'), title)
+                if msg:
+                    print('合集:', '成功' if ok else '失败', '-', msg)
+            except Exception as e:
+                print(f'加入合集失败(不影响上传结果): {e}')
         elif data['name'] == VideoUploaderEvents.FAILED.value:
             db.update_video(video_id, status=VideoStatus.ERROR)
             cli_progress_done()

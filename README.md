@@ -140,6 +140,25 @@ uv sync
 下载 1GB+），本项目清理不需要它。Docker 部署无需清理——旧镜像是按 requirements.txt
 构建的，用新 Dockerfile 重建镜像即可。
 
+## 上传后自动加入合集
+
+`bilibili-api-python` 17.4.2（2026-06 最新版）的 `VideoMeta` 不支持投稿时指定合集，
+项目改为直接调用创作中心合集 API（与浏览器投稿页同源，见 `src/utils/bili_season.py`）。
+上传成功后（Web 和 CLI 两条路径都会触发），会按 `config/_upload.json` 把视频追加到
+指定合集的「正片」小节末尾：
+
+```json
+{
+  "season_id": 1100651,
+  "season_title": ""
+}
+```
+
+- `season_id` 与 `season_title` 二选一，优先 `season_id`；两者都留空则不启用。
+- 查看账号下所有合集及其 `season_id`：`python cli/seasons.py`
+- 该文件被 gitignore（账号相关），每台部署机各自配置。
+- 加合集失败只打日志、不影响上传结果；找不到合集/取不到 cid 时会输出原因。
+
 ## Docker
 
 ```bash
