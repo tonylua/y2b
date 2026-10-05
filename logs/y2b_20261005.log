@@ -1,2 +1,0 @@
-{"timestamp": "2026-10-05T23:24:53.947456", "level": "INFO", "event": "llm_request", "request_id": "c400bd6a", "texts_count": 1, "chars_count": 215, "model": "deepseek-flash"}
-{"timestamp": "2026-10-05T23:24:54.911458", "level": "INFO", "event": "llm_response", "request_id": "c400bd6a", "duration_seconds": 0.96, "tokens_used": 287, "success": true}
