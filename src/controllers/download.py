@@ -2,6 +2,7 @@ import os
 import traceback
 import asyncio
 import threading
+import time
 from datetime import datetime
 from flask import request, redirect, url_for, render_template, flash, jsonify
 from yt_dlp import YoutubeDL
@@ -12,6 +13,7 @@ from utils.constants import Route, VideoStatus, DownloadStage
 from utils.sys import join_root_path, clean_temp_files
 from utils.db import VideoDB
 from utils.progress import download_progress
+from utils.logger import structured_logger
 from .upload import do_upload
 
 
@@ -19,11 +21,15 @@ async def run_yt_dlp(session, url, video_id, ydl_opts, final_save_path, temp_sav
     # keep prior progress value when entering downloading stage to avoid visible reset
     existing = download_progress.get_progress(video_id)
     existing_pct = existing.get('progress', 0) if existing else 0
-    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, existing_pct, '开始下载视频')
-    
+    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, max(existing_pct, 15), '开始下载视频')
+
+    download_start_time = time.time()
+
     if os.path.exists(final_save_path):
         print("文件已存在，跳过下载")
-        download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 100, '使用已存在的视频文件')
+        download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 50, '使用已存在的视频文件')
+        file_size = os.path.getsize(final_save_path)
+        structured_logger.log_download_complete(video_id, 0, file_size)
     else:
         # attach a progress hook so we can update UI with percent during download
         def _ydl_progress_hook(d):
@@ -32,17 +38,18 @@ async def run_yt_dlp(session, url, video_id, ydl_opts, final_save_path, temp_sav
                 if status == 'downloading':
                     total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
                     downloaded = d.get('downloaded_bytes') or 0
-                    percent = int(downloaded * 100 / total) if total else 0
+                    # Map download progress to 15-50% range
+                    percent = 15 + int((downloaded * 35 / total)) if total else 15
                     eta = d.get('eta')
                     speed = d.get('speed')
                     msg = ''
                     if eta is not None:
                         msg = f"ETA {eta}s"
                     elif speed:
-                        msg = f"{speed} B/s"
+                        msg = f"{speed / 1024 / 1024:.2f} MB/s" if speed > 1024*1024 else f"{speed / 1024:.2f} KB/s"
                     download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, percent, msg)
                 elif status == 'finished':
-                    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 100, 'yt-dlp: finished')
+                    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 50, 'yt-dlp: finished')
             except Exception:
                 pass
 
@@ -59,15 +66,20 @@ async def run_yt_dlp(session, url, video_id, ydl_opts, final_save_path, temp_sav
                 if os.path.exists(temp_save_path):
                     os.rename(temp_save_path, final_save_path)
                     print(f"文件已重命名: {temp_save_path} -> {final_save_path}")
-                    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 100, '视频下载完成')
+                    download_progress.update_stage(video_id, DownloadStage.DOWNLOADING_VIDEO, 50, '视频下载完成')
+
+                    # 记录下载完成
+                    download_duration = time.time() - download_start_time
+                    file_size = os.path.getsize(final_save_path)
+                    structured_logger.log_download_complete(video_id, download_duration, file_size)
                 else:
                     raise Exception(f"临时文件不存在: {temp_save_path}")
             except Exception as e:
                 if os.path.exists(temp_save_path):
                     print(f"保留临时文件以便恢复: {temp_save_path}")
                 raise e
-    
-    download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 0, '准备上传')
+
+    download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 50, '准备上传')
     result = await do_upload(session, video_id)
     return True, result
 
@@ -107,6 +119,8 @@ def download_controller(session, url):
     form = YouTubeDownloadForm(**args)
 
     if form.validate_on_submit():
+        # Note: for bilingual subtitles, we download English first (YouTube auto-generated
+        # Chinese is low quality), then translate with LLM in subtitle.py
         subtitle_map = {
             'en': "en",
             'cn': "zh-Hans",
@@ -137,6 +151,7 @@ def download_controller(session, url):
         def background_task():
             video_id = None
             temp_save_path = None
+            task_start_time = time.time()
             try:
                 download_progress.update_stage(temp_id, DownloadStage.FETCHING_INFO, 5, '正在获取视频信息...')
                 info = get_youtube_info(video_url)
@@ -171,6 +186,8 @@ def download_controller(session, url):
                 if existing_video:
                     video_id = existing_video['id']
                     print(f"Video {orig_id} already exists for user {user}; reusing record {video_id}")
+                    # Clear any stale progress state from previous attempt
+                    download_progress.remove_progress(str(video_id))
                     db.update_video(video_id, save_path=final_save_path, save_srt=save_srt, subtitle_lang=need_subtitle, status=VideoStatus.DOWNLOADING)
                 else:
                     video_id = db.create_video(
@@ -185,7 +202,13 @@ def download_controller(session, url):
                     db.update_video(video_id, status=VideoStatus.DOWNLOADING)
 
                 download_progress.update_video_id(temp_id, str(video_id))
-                download_progress.update_stage(str(video_id), DownloadStage.FETCHING_INFO, 10, '视频信息获取完成')
+                download_progress.update_stage(str(video_id), DownloadStage.FETCHING_INFO, 15, '视频信息获取完成')
+
+                # 记录下载开始
+                structured_logger.log_download_start(
+                    str(video_id), video_url, user,
+                    current_session['resolution'], need_subtitle
+                )
 
                 print('准备下载', video_id, '\n', opts)
 
@@ -221,6 +244,8 @@ def download_controller(session, url):
                     print(f"已清理临时文件: {temp_save_path}")
                 if video_id:
                     download_progress.set_error(str(video_id), str(e))
+                    db = VideoDB()
+                    db.update_video(video_id, status=VideoStatus.ERROR)
                 else:
                     download_progress.set_error(temp_id, str(e))
 

@@ -1,0 +1,75 @@
+{"timestamp": "2026-10-06T00:21:05.123067", "level": "INFO", "event": "download_start", "video_id": "20", "url": "https://www.youtube.com/watch?v=nseYdTzMW64", "user": "user", "resolution": "1080", "subtitle": "bilingual"}
+{"timestamp": "2026-10-06T00:21:05.130576", "level": "INFO", "event": "download_complete", "video_id": "20", "duration_seconds": 0, "file_size_mb": 155.89}
+{"timestamp": "2026-10-06T00:21:05.243508", "level": "INFO", "event": "subtitle_translate_start", "video_id": "nseYdTzMW64", "source_lang": "en", "target_lang": "zh", "sentences_count": 16}
+{"timestamp": "2026-10-06T00:21:05.244506", "level": "INFO", "event": "llm_request", "request_id": "032720bc", "texts_count": 1, "chars_count": 1533, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:08.833891", "level": "INFO", "event": "llm_response", "request_id": "032720bc", "duration_seconds": 3.59, "tokens_used": 1241, "success": true}
+{"timestamp": "2026-10-06T00:21:08.835899", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 3, "total": 16, "percent": 18.8}
+{"timestamp": "2026-10-06T00:21:08.837899", "level": "INFO", "event": "llm_request", "request_id": "06a8d714", "texts_count": 1, "chars_count": 2159, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:11.480670", "level": "INFO", "event": "llm_response", "request_id": "06a8d714", "duration_seconds": 2.64, "tokens_used": 1162, "success": true}
+{"timestamp": "2026-10-06T00:21:11.483015", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 5, "total": 16, "percent": 31.2}
+{"timestamp": "2026-10-06T00:21:11.485022", "level": "INFO", "event": "llm_request", "request_id": "dbcdb88f", "texts_count": 1, "chars_count": 2497, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:16.782012", "level": "INFO", "event": "llm_response", "request_id": "dbcdb88f", "duration_seconds": 5.3, "tokens_used": 1910, "success": true}
+{"timestamp": "2026-10-06T00:21:16.784048", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 6, "total": 16, "percent": 37.5}
+{"timestamp": "2026-10-06T00:21:16.784048", "level": "INFO", "event": "llm_request", "request_id": "e552bbe9", "texts_count": 1, "chars_count": 2727, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:19.012336", "level": "INFO", "event": "llm_response", "request_id": "e552bbe9", "duration_seconds": 2.23, "tokens_used": 1135, "success": true}
+{"timestamp": "2026-10-06T00:21:19.013343", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 9, "total": 16, "percent": 56.2}
+{"timestamp": "2026-10-06T00:21:19.014344", "level": "INFO", "event": "llm_request", "request_id": "cecc5fe7", "texts_count": 1, "chars_count": 3212, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:34.999299", "level": "INFO", "event": "llm_response", "request_id": "cecc5fe7", "duration_seconds": 15.98, "tokens_used": 4680, "success": true}
+{"timestamp": "2026-10-06T00:21:35.000308", "level": "INFO", "event": "llm_request", "request_id": "72a03197", "texts_count": 2, "chars_count": 3275, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:50.992676", "level": "INFO", "event": "llm_response", "request_id": "72a03197", "duration_seconds": 15.99, "tokens_used": 4715, "success": true}
+{"timestamp": "2026-10-06T00:21:50.995679", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 10, "total": 16, "percent": 62.5}
+{"timestamp": "2026-10-06T00:21:50.995679", "level": "INFO", "event": "llm_request", "request_id": "7adc44fd", "texts_count": 1, "chars_count": 3856, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:53.668014", "level": "INFO", "event": "llm_response", "request_id": "7adc44fd", "duration_seconds": 2.67, "tokens_used": 1535, "success": true}
+{"timestamp": "2026-10-06T00:21:53.669021", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 11, "total": 16, "percent": 68.8}
+{"timestamp": "2026-10-06T00:21:53.670022", "level": "INFO", "event": "llm_request", "request_id": "cc44ea42", "texts_count": 1, "chars_count": 4338, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:21:56.633364", "level": "INFO", "event": "llm_response", "request_id": "cc44ea42", "duration_seconds": 2.96, "tokens_used": 1598, "success": true}
+{"timestamp": "2026-10-06T00:21:56.634371", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 13, "total": 16, "percent": 81.2}
+{"timestamp": "2026-10-06T00:21:56.635370", "level": "INFO", "event": "llm_request", "request_id": "2f454c6c", "texts_count": 1, "chars_count": 1817, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:22:02.487305", "level": "INFO", "event": "llm_response", "request_id": "2f454c6c", "duration_seconds": 5.85, "tokens_used": 1685, "success": true}
+{"timestamp": "2026-10-06T00:22:02.488314", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 14, "total": 16, "percent": 87.5}
+{"timestamp": "2026-10-06T00:22:02.489313", "level": "INFO", "event": "llm_request", "request_id": "433975c8", "texts_count": 1, "chars_count": 2449, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:22:12.802832", "level": "INFO", "event": "llm_response", "request_id": "433975c8", "duration_seconds": 10.31, "tokens_used": 2790, "success": true}
+{"timestamp": "2026-10-06T00:22:12.804837", "level": "INFO", "event": "llm_request", "request_id": "fa91a63d", "texts_count": 2, "chars_count": 2512, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:22:22.109739", "level": "INFO", "event": "llm_response", "request_id": "fa91a63d", "duration_seconds": 9.3, "tokens_used": 2826, "success": true}
+{"timestamp": "2026-10-06T00:22:22.112748", "level": "INFO", "event": "llm_request", "request_id": "1d0db667", "texts_count": 1, "chars_count": 2335, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:22:31.555972", "level": "INFO", "event": "llm_response", "request_id": "1d0db667", "duration_seconds": 9.44, "tokens_used": 2691, "success": true}
+{"timestamp": "2026-10-06T00:22:31.556979", "level": "INFO", "event": "llm_request", "request_id": "b3ce0699", "texts_count": 2, "chars_count": 2398, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:26:33.496495", "level": "INFO", "event": "llm_request", "request_id": "920f4c39", "texts_count": 1, "chars_count": 221, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:26:35.027391", "level": "INFO", "event": "llm_response", "request_id": "920f4c39", "duration_seconds": 1.53, "tokens_used": 359, "success": true}
+{"timestamp": "2026-10-06T00:37:51.946850", "level": "INFO", "event": "download_start", "video_id": "20", "url": "https://www.youtube.com/watch?v=nseYdTzMW64", "user": "user", "resolution": "1080", "subtitle": "bilingual"}
+{"timestamp": "2026-10-06T00:37:51.950849", "level": "INFO", "event": "download_complete", "video_id": "20", "duration_seconds": 0, "file_size_mb": 155.89}
+{"timestamp": "2026-10-06T00:37:52.041439", "level": "INFO", "event": "subtitle_translate_start", "video_id": "nseYdTzMW64", "source_lang": "en", "target_lang": "zh", "sentences_count": 16}
+{"timestamp": "2026-10-06T00:37:52.045437", "level": "INFO", "event": "llm_request", "request_id": "37725ec5", "texts_count": 1, "chars_count": 1533, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:38:00.196539", "level": "INFO", "event": "llm_response", "request_id": "37725ec5", "duration_seconds": 8.15, "tokens_used": 2322, "success": true}
+{"timestamp": "2026-10-06T00:38:00.197700", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 3, "total": 16, "percent": 18.8}
+{"timestamp": "2026-10-06T00:38:00.201708", "level": "INFO", "event": "llm_request", "request_id": "965eb019", "texts_count": 1, "chars_count": 2159, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:38:07.017786", "level": "INFO", "event": "llm_response", "request_id": "965eb019", "duration_seconds": 6.81, "tokens_used": 2070, "success": true}
+{"timestamp": "2026-10-06T00:38:07.024852", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 5, "total": 16, "percent": 31.2}
+{"timestamp": "2026-10-06T00:38:07.027850", "level": "INFO", "event": "llm_request", "request_id": "9ae08852", "texts_count": 1, "chars_count": 2497, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:38:17.567737", "level": "INFO", "event": "llm_response", "request_id": "9ae08852", "duration_seconds": 10.53, "tokens_used": 3214, "success": true}
+{"timestamp": "2026-10-06T00:38:17.568746", "level": "INFO", "event": "llm_request", "request_id": "11fa711f", "texts_count": 2, "chars_count": 2560, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:38:28.669955", "level": "INFO", "event": "llm_response", "request_id": "11fa711f", "duration_seconds": 11.1, "tokens_used": 3250, "success": true}
+{"timestamp": "2026-10-06T00:42:06.819900", "level": "INFO", "event": "download_start", "video_id": "20", "url": "https://www.youtube.com/watch?v=nseYdTzMW64", "user": "user", "resolution": "1080", "subtitle": "bilingual"}
+{"timestamp": "2026-10-06T00:42:06.824947", "level": "INFO", "event": "download_complete", "video_id": "20", "duration_seconds": 0, "file_size_mb": 155.89}
+{"timestamp": "2026-10-06T00:42:06.914489", "level": "INFO", "event": "subtitle_translate_start", "video_id": "nseYdTzMW64", "source_lang": "en", "target_lang": "zh", "sentences_count": 16}
+{"timestamp": "2026-10-06T00:42:06.922494", "level": "INFO", "event": "llm_request", "request_id": "da187a18", "texts_count": 1, "chars_count": 1533, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:42:16.716655", "level": "INFO", "event": "llm_response", "request_id": "da187a18", "duration_seconds": 9.79, "tokens_used": 2718, "success": true}
+{"timestamp": "2026-10-06T00:42:16.720654", "level": "INFO", "event": "llm_request", "request_id": "1a4f5d66", "texts_count": 1, "chars_count": 1200, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:42:25.819493", "level": "INFO", "event": "llm_response", "request_id": "1a4f5d66", "duration_seconds": 9.09, "tokens_used": 2436, "success": true}
+{"timestamp": "2026-10-06T00:42:25.825498", "level": "INFO", "event": "llm_request", "request_id": "fffe9f91", "texts_count": 2, "chars_count": 1263, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:42:35.106717", "level": "INFO", "event": "llm_response", "request_id": "fffe9f91", "duration_seconds": 9.28, "tokens_used": 2472, "success": true}
+{"timestamp": "2026-10-06T00:45:09.519641", "level": "INFO", "event": "download_start", "video_id": "20", "url": "https://www.youtube.com/watch?v=nseYdTzMW64", "user": "user", "resolution": "1080", "subtitle": "bilingual"}
+{"timestamp": "2026-10-06T00:45:09.523641", "level": "INFO", "event": "download_complete", "video_id": "20", "duration_seconds": 0, "file_size_mb": 155.89}
+{"timestamp": "2026-10-06T00:45:09.611198", "level": "INFO", "event": "subtitle_translate_start", "video_id": "nseYdTzMW64", "source_lang": "en", "target_lang": "zh", "sentences_count": 16}
+{"timestamp": "2026-10-06T00:45:09.619209", "level": "INFO", "event": "llm_request", "request_id": "af8cbf9f", "texts_count": 1, "chars_count": 1533, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:45:19.210291", "level": "INFO", "event": "llm_response", "request_id": "af8cbf9f", "duration_seconds": 9.59, "tokens_used": 2717, "success": true}
+{"timestamp": "2026-10-06T00:45:19.214478", "level": "INFO", "event": "llm_request", "request_id": "bf84b489", "texts_count": 2, "chars_count": 1596, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:45:22.087177", "level": "INFO", "event": "llm_response", "request_id": "bf84b489", "duration_seconds": 2.87, "tokens_used": 1155, "success": true}
+{"timestamp": "2026-10-06T00:45:22.095176", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 3, "total": 16, "percent": 18.8}
+{"timestamp": "2026-10-06T00:45:22.100859", "level": "INFO", "event": "llm_request", "request_id": "82d5470a", "texts_count": 1, "chars_count": 2159, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:45:28.215950", "level": "INFO", "event": "llm_response", "request_id": "82d5470a", "duration_seconds": 6.11, "tokens_used": 1975, "success": true}
+{"timestamp": "2026-10-06T00:45:28.216957", "level": "DEBUG", "event": "subtitle_translate_progress", "video_id": "nseYdTzMW64", "completed": 5, "total": 16, "percent": 31.2}
+{"timestamp": "2026-10-06T00:45:28.217956", "level": "INFO", "event": "llm_request", "request_id": "8c39ce03", "texts_count": 1, "chars_count": 2497, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:45:39.860871", "level": "INFO", "event": "llm_response", "request_id": "8c39ce03", "duration_seconds": 11.64, "tokens_used": 3214, "success": true}
+{"timestamp": "2026-10-06T00:45:39.864877", "level": "INFO", "event": "llm_request", "request_id": "1f52c152", "texts_count": 2, "chars_count": 2560, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T00:45:51.533890", "level": "INFO", "event": "llm_response", "request_id": "1f52c152", "duration_seconds": 11.67, "tokens_used": 3250, "success": true}

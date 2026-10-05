@@ -109,8 +109,8 @@ class LLMTranslator:
             # 整批失败（网络/超长/截断）：退化成逐句翻译，别让一条失败毁掉整个字幕
             logging.error(f"LLM 批量翻译失败（{len(texts)} 句），逐句重试: {e}")
             if len(texts) == 1:
-                logging.warning("单句翻译失败，保留原文")
-                return list(texts)
+                # 单句翻译失败，直接抛出异常而非静默保留原文
+                raise RuntimeError(f"LLM 单句翻译失败: {e}") from e
             return [
                 single[0]
                 for text in texts
@@ -133,8 +133,9 @@ class LLMTranslator:
             try:
                 result[i] = self.translate_texts([texts[i]], context_sentences=context_sentences)[0]
             except Exception as e:
-                logging.warning(f"第 {i + 1} 句单独重翻失败，保留原文: {e}")
-                result[i] = texts[i]
+                logging.error(f"第 {i + 1} 句单独重翻失败: {e}")
+                # 抛出异常而非静默保留原文
+                raise RuntimeError(f"字幕翻译失败（句 {i+1}）: {e}") from e
 
         return result  # type: ignore[return-value]
 
@@ -318,6 +319,7 @@ class LLMTranslator:
         try:
             import srt as _srt
             from datetime import timedelta
+            from .logger import structured_logger
 
             with open(input_path, 'r', encoding=encoding) as f:
                 subtitles = list(_srt.parse(f.read()))
@@ -331,7 +333,15 @@ class LLMTranslator:
             translated_sentences = []
             context = []  # 维护前文上下文
 
-            for indices, batch_chars in self.iter_batches(sentence_texts):
+            # 记录翻译开始
+            import os
+            video_id = os.path.basename(input_path).split('.')[0]
+            structured_logger.log_subtitle_translate_start(
+                video_id, 'en', 'zh', len(sentence_texts)
+            )
+            translate_start_time = time.time()
+
+            for batch_idx, (indices, batch_chars) in enumerate(self.iter_batches(sentence_texts)):
                 batch = [sentence_texts[i] for i in indices]
                 logging.info(f"翻译批次: {len(batch)} 句 / {batch_chars} 字符 (句 {indices[0] + 1}-{indices[-1] + 1})")
 
@@ -341,8 +351,13 @@ class LLMTranslator:
                 # 更新上下文（保留最后 2 句英文）
                 context = sentence_texts[max(0, indices[-1] - 1):indices[-1] + 1]
 
+                # 细粒度进度回调
+                completed = indices[-1] + 1
                 if progress_callback:
-                    progress_callback(indices[-1] + 1, len(sentence_texts))
+                    progress_callback(completed, len(sentence_texts))
+
+                # 记录翻译进度
+                structured_logger.log_subtitle_translate_progress(video_id, completed, len(sentence_texts))
 
             # Step 3 & 4: 中文重切 + 时间轴重分配
             result_subtitles = []
@@ -374,6 +389,10 @@ class LLMTranslator:
                             content=line_text
                         ))
                         sub_index += 1
+
+            # 记录翻译完成
+            translate_duration = time.time() - translate_start_time
+            structured_logger.log_subtitle_translate_complete(video_id, translate_duration)
 
             logging.info(f"Generated {len(result_subtitles)} subtitle entries ({'bilingual' if bilingual else 'Chinese-only'}) from {len(sentences)} sentences")
 

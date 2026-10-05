@@ -24,15 +24,15 @@ async def do_upload(session, video_id):
     subtitles_path = ''
 
     print(f"准备上传 {video_id} {title}")
-    download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 20, '准备上传')
+    download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 50, '准备上传')
 
     try:
         # ensure title is cleaned and legal for bilibili (<=80 chars)
         from utils.stringUtil import sanitize_title
         title = sanitize_title(cleaned_text(title), max_len=80)
         save_dir, _ = os.path.split(video_path)
-        
-        download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 22, '检查封面...')
+
+        download_progress.update_stage(video_id, DownloadStage.PREPARING_UPLOAD, 52, '检查封面...')
         cover = find_cover_images(save_dir, orig_id)
         if not cover:
             cover_path = os.path.join(save_dir, f"{orig_id}.jpg")
@@ -44,11 +44,15 @@ async def do_upload(session, video_id):
                 raise FileNotFoundError('封面不存在', record['origin_id'])
 
         if session['need_subtitle']:
-            download_progress.update_stage(video_id, DownloadStage.PROCESSING_SUBTITLE, 25, '开始处理字幕')
-            
+            download_progress.update_stage(video_id, DownloadStage.PROCESSING_SUBTITLE, 55, '开始处理字幕')
+
             def subtitle_progress_callback(percent: int, message: str):
-                download_progress.update_stage(video_id, DownloadStage.PROCESSING_SUBTITLE, percent, message)
-            
+                # subtitle.py 内部进度范围是 26-39%，映射到 55-75%
+                # 公式: 55 + (percent - 26) / (39 - 26) * (75 - 55)
+                clamped = max(26, min(39, percent))
+                mapped_percent = 55 + int((clamped - 26) * 20 / 13)
+                download_progress.update_stage(video_id, DownloadStage.PROCESSING_SUBTITLE, mapped_percent, message)
+
             subtitle_result = add_subtitle(
                 record=record,
                 orig_id=orig_id,
@@ -60,7 +64,7 @@ async def do_upload(session, video_id):
             title = subtitle_result['title']
             video_path = subtitle_result['video_path']
             subtitles_path = subtitle_result['subtitles_path']
-            download_progress.update_stage(video_id, DownloadStage.PROCESSING_SUBTITLE, 39, '字幕处理完成')
+            download_progress.update_stage(video_id, DownloadStage.PROCESSING_SUBTITLE, 75, '字幕处理完成')
 
         db_update_args = {
             "title": title,
@@ -77,7 +81,7 @@ async def do_upload(session, video_id):
             download_progress.complete_progress(video_id)
             return True, None
 
-        download_progress.update_stage(video_id, DownloadStage.UPLOADING, 40, '准备上传到B站')
+        download_progress.update_stage(video_id, DownloadStage.UPLOADING, 75, '准备上传到B站')
 
         args = {
             "sessdata": session['SESSDATA'],
@@ -153,21 +157,25 @@ async def do_upload(session, video_id):
             else:
                 if data['name'] == 'UPLOAD':
                     progress = data.get('data', {}).get('p', 0)
-                    download_progress.update_stage(video_id, DownloadStage.UPLOADING, 40 + progress * 0.6, f'上传中 {progress}%')
+                    # Map upload progress to 75-100% range
+                    mapped_percent = 75 + int(progress * 0.25)
+                    download_progress.update_stage(video_id, DownloadStage.UPLOADING, mapped_percent, f'上传中 {progress}%')
                 print('上传中', data)
 
         print("开始上传...")
         try:
             db.update_video(video_id, status=VideoStatus.UPLOADING)
-            download_progress.update_stage(video_id, DownloadStage.UPLOADING, 45, '开始上传')
+            download_progress.update_stage(video_id, DownloadStage.UPLOADING, 77, '开始上传')
             await uploader.start()
         except bilibili_api.exceptions.NetworkException as e:
             msg = "bilibili_api 403，请尝试更新cookie信息"
             download_progress.set_error(video_id, msg)
+            db.update_video(video_id, status=VideoStatus.ERROR)
             return False, msg
         except bilibili_api.exceptions.ResponseCodeException as e:
             msg = "需要输入验证码了，请稍后再投稿"
             download_progress.set_error(video_id, msg)
+            db.update_video(video_id, status=VideoStatus.ERROR)
             return False, msg
         return True, None
     except KeyboardInterrupt:

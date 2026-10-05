@@ -211,29 +211,83 @@ class LLMClient:
         if not self.client:
             raise RuntimeError("LLM client not initialized")
 
+        from .logger import structured_logger
+        import uuid
+
         trans_cfg = self.config.get_translation_config()
         if temperature is None:
             temperature = trans_cfg.get('temperature', 0.3)
         if max_tokens is None:
             max_tokens = trans_cfg.get('max_tokens', 2048)
 
+        request_id = str(uuid.uuid4())[:8]
+        total_chars = sum(len(m.get('content', '')) for m in messages)
+
+        # 记录请求
+        structured_logger.log_llm_request(
+            request_id, len(messages), total_chars, self.config.model
+        )
+
         last_error = None
+        start_time = time.time()
+
         for attempt in range(retries):
             try:
                 kwargs = {
                     'model': self.config.model,
                     'messages': messages,
                     'temperature': temperature,
-                    'max_tokens': max_tokens
+                    'max_tokens': max_tokens,
+                    # 禁用推理模式：deepseek-flash 的推理会消耗大量 token 导致 content 为空
+                    'stream': False,
                 }
+                # DeepSeek R1 系列推理模型需要显式禁用推理
+                if 'flash' in self.config.model or 'reasoner' in self.config.model:
+                    # 通过 extra_body 传递 DeepSeek 特有参数
+                    kwargs['extra_body'] = {'enable_reasoning': False}
+
                 if response_format:
                     kwargs['response_format'] = response_format
 
                 resp = self.client.chat.completions.create(**kwargs)
-                return resp.choices[0].message.content
+                duration = time.time() - start_time
+
+                # 调试：用 print 直接打到终端
+                choice = resp.choices[0]
+                content = choice.message.content
+                reasoning = getattr(choice.message, 'reasoning_content', None)
+                print(
+                    f"[LLM DEBUG] finish_reason={choice.finish_reason} "
+                    f"content_len={len(content) if content else 0} "
+                    f"reasoning_len={len(reasoning) if reasoning else 0} "
+                    f"usage={resp.usage}\n"
+                    f"[LLM DEBUG] content={repr(content)}\n"
+                    f"[LLM DEBUG] reasoning={repr(reasoning[:300]) if reasoning else None}",
+                    flush=True
+                )
+
+                # 记录成功响应
+                tokens_used = getattr(resp.usage, 'total_tokens', None) if hasattr(resp, 'usage') else None
+                structured_logger.log_llm_response(request_id, duration, tokens_used, True)
+
+                return content
 
             except (APIError, APITimeoutError) as e:
                 last_error = e
+                error_code = getattr(e, 'status_code', None)
+
+                # 记录错误
+                structured_logger.log_llm_error(request_id, str(e), error_code)
+
+                # 401认证错误不重试
+                if error_code == 401:
+                    logging.error(f"LLM API 认证失败 (401): API密钥无效或已过期。请检查 config/_llm.json 中的 api_key")
+                    raise RuntimeError(
+                        f"LLM API 认证失败: API密钥无效或已过期。\n"
+                        f"请访问 {self.config.base_url.replace('/v1', '')} 获取新的API密钥，\n"
+                        f"然后更新 config/_llm.json 中的 api_key 字段。"
+                    ) from e
+
                 if attempt < retries - 1:
                     wait = 2 ** attempt
                     logging.warning(f"LLM API error (attempt {attempt+1}/{retries}): {e}, retrying in {wait}s...")
@@ -253,11 +307,12 @@ class LLMClient:
         """调用 LLM 并解析成 dict。返回不合法 JSON 时自动再要一次更严格的输出。"""
         last_error = None
         for attempt in range(attempts):
+            # deepseek-flash/deepseek-chat 不稳定支持 response_format，去掉该参数
             content = self.chat(
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                response_format={"type": "json_object"}
+                response_format=None  # 移除 json_object 强制要求
             )
             try:
                 return parse_json_response(content)

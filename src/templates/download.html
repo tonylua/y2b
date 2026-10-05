@@ -203,21 +203,30 @@ function startProgressPolling() {
 }
 
 function updateProgressUI(progress) {
-    var progressPercent = Math.min(Math.max(progress.progress, 0), 100);
+    var progressPercent = Math.min(Math.max(progress.progress || 0, 0), 100);
     var progressBar = $('#progressBar');
     progressBar.css('width', progressPercent + '%');
     progressBar.attr('aria-valuenow', progressPercent);
-    
+
     if (progress.error) {
-        $('#progressText').html('<span class="text-danger">' + progress.error + '</span>');
+        $('#progressText').html('<span class="text-danger">错误: ' + progress.error + '</span>');
         progressBar.removeClass('progress-bar-success progress-bar-info progress-bar-warning').addClass('progress-bar-danger');
+        progressBar.text(progressPercent + '%');
+
+        // Stop polling on error
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        $('#submitBtn').prop('disabled', false).text('{{ form.submit.label.text }}');
     } else {
         var statusText = progress.stage_name + ' - ' + progressPercent + '%';
         if (progress.message) {
             statusText += ' - ' + progress.message;
         }
         $('#progressText').text(statusText);
-        
+        progressBar.text(progressPercent + '%');
+
         if (progress.completed) {
             progressBar.removeClass('progress-bar-danger progress-bar-info progress-bar-warning').addClass('progress-bar-success');
         } else {

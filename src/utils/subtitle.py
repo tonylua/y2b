@@ -328,6 +328,11 @@ def add_subtitle(
                 subtitles_path = subtitle_down_result['path']
                 subtitles_exist = os.path.exists(subtitles_path)
                 print(f"下载字幕 {subtitles_exist}: {subtitles_path}")
+
+                # Validate bilingual requirement after download
+                if need_subtitle == 'bilingual' and actual_subtitle_type != 'bilingual':
+                    print(f"需要双语字幕，但只下载到了 {actual_subtitle_type}，尝试翻译...")
+                    # Will be handled below in the translation block
             else:
                 # 已尝试通过 YouTubeTranscriptApi+yt-dlp(+youtube-dl)等回退下载字幕，未找到
                 print('字幕下载失败，已回退多种下载方式仍未获取到字幕')
@@ -379,7 +384,7 @@ def add_subtitle(
                 # Load LLM config and client
                 llm_config = LLMConfig()
                 if not llm_config.enabled:
-                    raise RuntimeError("LLM 翻译未启用，无法生成双语字幕")
+                    raise RuntimeError("双语字幕需要 LLM 翻译，但 LLM 翻译未启用。请编辑 config/_llm.json 启用 LLM 或选择其他字幕选项")
 
                 llm_client = LLMClient(llm_config)
                 glossary = _load_glossary()
@@ -395,13 +400,23 @@ def add_subtitle(
                         orig_lang = lang_match.group(1)
                         merged_path = subtitles_path.replace(f'.{orig_lang}.srt', f'.{orig_lang}_{other_lang}.srt')
 
+                # 翻译进度回调：映射到26-39%
+                def translate_progress_callback(current: int, total: int):
+                    if total > 0:
+                        # 翻译阶段映射到26-39%
+                        percent = 26 + int((current / total) * 13)
+                        update_progress(percent, f'翻译中 {current}/{total} 句')
+
                 # 直接输出双语（sentence 模式内部对齐）
-                translator.translate_srt_file(subtitles_path, merged_path, bilingual=True)
+                translator.translate_srt_file(subtitles_path, merged_path, bilingual=True, progress_callback=translate_progress_callback)
                 subtitles_path = merged_path
                 actual_subtitle_type = 'bilingual'
                 print(f"双语字幕已生成: {merged_path}")
             except Exception as e:
                 print(f"翻译或合并失败: {e}")
+                # For bilingual requirement, this is a critical error
+                if need_subtitle == 'bilingual':
+                    raise RuntimeError(f"双语字幕生成失败: {e}")
                 actual_subtitle_type = existing_type
         else:
             actual_subtitle_type = existing_type if existing_type else need_subtitle
@@ -438,14 +453,15 @@ def add_subtitle(
             print("加字幕...", title, subtitles_path, ff_args)
             video_duration = get_video_duration(origin_video_path)
 
-            last_percent = [25]
+            last_percent = [30]
             def ffmpeg_progress_callback(percent: int, message: str):
-                mapped_percent = 25 + int(percent * 0.14)
+                # ffmpeg percent is 0-100, map to 30-39% range (subtitle embedding is final step)
+                mapped_percent = 30 + int(percent * 0.09)
                 if mapped_percent > last_percent[0]:
                     last_percent[0] = mapped_percent
                     update_progress(mapped_percent, '正在嵌入字幕...')
 
-            update_progress(25, '正在嵌入字幕...')
+            update_progress(30, '正在嵌入字幕...')
             try:
                 run_cli_command('ffmpeg', ff_args, ffmpeg_progress_callback, video_duration)
                 # move temp to final
@@ -469,9 +485,12 @@ def add_subtitle(
             raise
         except (Exception, subprocess.CalledProcessError) as e:
             print('ffmpeg 加字幕过程报错', e)
-            # ffmpeg 失败，清除字幕类型前缀，回退到 [转]
+            # ffmpeg 失败，清除字幕类型前缀，回退到 [转]，且标记字幕路径为空
             cleaned = re.sub(r'^(\[.*?\]\s*)+', '', title)
             title = f"[转] {cleaned}"
+            subtitles_path = ''
+            # Use original video path without subtitle
+            video_path = origin_video_path
     else:
         # 没下载到字幕
         cleaned = re.sub(r'^(\[.*?\]\s*)+', '', title)
