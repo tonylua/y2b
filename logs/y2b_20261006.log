@@ -88,3 +88,7 @@
 {"timestamp": "2026-10-06T00:56:20.881116", "level": "INFO", "event": "llm_response", "request_id": "8533823a", "duration_seconds": 11.55, "tokens_used": 3214, "success": true}
 {"timestamp": "2026-10-06T00:56:20.883118", "level": "INFO", "event": "llm_request", "request_id": "d29d1b55", "texts_count": 2, "chars_count": 2560, "model": "deepseek-flash"}
 {"timestamp": "2026-10-06T00:56:31.979085", "level": "INFO", "event": "llm_response", "request_id": "d29d1b55", "duration_seconds": 11.09, "tokens_used": 3250, "success": true}
+{"timestamp": "2026-10-06T01:01:38.178379", "level": "INFO", "event": "llm_request", "request_id": "e1422867", "texts_count": 1, "chars_count": 221, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T01:01:38.944671", "level": "INFO", "event": "llm_response", "request_id": "e1422867", "duration_seconds": 0.76, "tokens_used": 141, "success": true}
+{"timestamp": "2026-10-06T01:02:40.203699", "level": "INFO", "event": "llm_request", "request_id": "a64c1e8f", "texts_count": 1, "chars_count": 215, "model": "deepseek-flash"}
+{"timestamp": "2026-10-06T01:02:41.006802", "level": "INFO", "event": "llm_response", "request_id": "a64c1e8f", "duration_seconds": 0.8, "tokens_used": 140, "success": true}

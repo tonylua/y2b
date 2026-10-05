@@ -238,13 +238,15 @@ class LLMClient:
                     'messages': messages,
                     'temperature': temperature,
                     'max_tokens': max_tokens,
-                    # 禁用推理模式：deepseek-flash 的推理会消耗大量 token 导致 content 为空
                     'stream': False,
                 }
-                # DeepSeek R1 系列推理模型需要显式禁用推理
-                if 'flash' in self.config.model or 'reasoner' in self.config.model:
-                    # 通过 extra_body 传递 DeepSeek 特有参数
-                    kwargs['extra_body'] = {'enable_reasoning': False}
+
+                # DeepSeek 推理模型：显式禁用思考模式（仅对 deepseek-flash / deepseek-v4-pro / deepseek-reasoner）
+                model_lower = self.config.model.lower()
+                if model_lower in ('deepseek-flash', 'deepseek-v4-pro', 'deepseek-reasoner'):
+                    kwargs['extra_body'] = {
+                        'thinking': {'type': 'disabled'}
+                    }
 
                 if response_format:
                     kwargs['response_format'] = response_format
