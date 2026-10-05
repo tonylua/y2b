@@ -252,19 +252,7 @@ class LLMClient:
                 resp = self.client.chat.completions.create(**kwargs)
                 duration = time.time() - start_time
 
-                # 调试：用 print 直接打到终端
-                choice = resp.choices[0]
-                content = choice.message.content
-                reasoning = getattr(choice.message, 'reasoning_content', None)
-                print(
-                    f"[LLM DEBUG] finish_reason={choice.finish_reason} "
-                    f"content_len={len(content) if content else 0} "
-                    f"reasoning_len={len(reasoning) if reasoning else 0} "
-                    f"usage={resp.usage}\n"
-                    f"[LLM DEBUG] content={repr(content)}\n"
-                    f"[LLM DEBUG] reasoning={repr(reasoning[:300]) if reasoning else None}",
-                    flush=True
-                )
+                content = resp.choices[0].message.content
 
                 # 记录成功响应
                 tokens_used = getattr(resp.usage, 'total_tokens', None) if hasattr(resp, 'usage') else None

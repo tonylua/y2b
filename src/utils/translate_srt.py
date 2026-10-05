@@ -59,9 +59,13 @@ class LLMTranslator:
             yield batch, chars
 
     def _max_tokens_for(self, texts: List[str]) -> int:
-        """按输入长度估输出预算：中文译文约为原文 1.5~2 倍，避免输出被截断。"""
+        """按输入长度估输出预算：中文译文约为原文 1.5~2 倍，deepseek-flash 推理模型需要额外预留推理token。"""
         chars = sum(len(t) for t in texts)
-        return min(8192, max(2048, int(chars * 1.6) + 512))
+        # deepseek-flash 推理模型：推理过程消耗大量token，需要预留足够空间
+        # 实测：单句推理可达2500+ tokens，content才200 tokens
+        # 策略：按字符数的4倍估算（覆盖推理+翻译），最小4096，最大16384
+        estimated = int(chars * 4) + 1024
+        return min(16384, max(4096, estimated))
 
     def _request_batch(self, texts: List[str], context_sentences: List[str] = None) -> Dict[str, str]:
         """发一次 LLM 请求，返回 {编号: 译文}。"""
