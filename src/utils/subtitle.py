@@ -430,14 +430,20 @@ def add_subtitle(
             # final path with subtitle suffix
             final_with_srt = add_suffix_to_filename(video_path, 'with_srt')
 
-            # If final file already exists, skip embedding
+            # If final file already exists, check if subtitle is newer
             if os.path.exists(final_with_srt):
-                print("已存在带字幕的视频，跳过嵌入字幕:", final_with_srt)
-                return {
-                    'title': title,
-                    'video_path': final_with_srt,
-                    'subtitles_path': subtitles_path
-                }
+                srt_mtime = os.path.getmtime(subtitles_path)
+                video_mtime = os.path.getmtime(final_with_srt)
+                if video_mtime > srt_mtime:
+                    print("已存在带字幕的视频，跳过嵌入字幕:", final_with_srt)
+                    return {
+                        'title': title,
+                        'video_path': final_with_srt,
+                        'subtitles_path': subtitles_path
+                    }
+                else:
+                    print(f"字幕文件已更新（{subtitles_path}），重新嵌入字幕")
+                    os.remove(final_with_srt)
 
             # write to a temp output first, then atomically rename to final
             # 注意：临时文件必须保留 .mp4 之类可识别的扩展名，否则 ffmpeg 无法推断封装格式
