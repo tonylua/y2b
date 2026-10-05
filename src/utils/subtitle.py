@@ -140,15 +140,23 @@ def _is_interactive() -> bool:
         return False
 
 
-def _confirm_new_terms(new_terms: Dict[str, str]) -> Dict[str, str]:
+def _confirm_new_terms(new_terms: Dict[str, str], video_id: str = None) -> Dict[str, str]:
     """
     确认新术语，返回接受的术语。
 
+    - 有 video_id（Web）：通过网页UI确认，阻塞等待用户操作
     - 交互式终端（CLI）：让用户选择 全部接受 / 逐个确认 / 跳过
-    - 非交互环境（Web 后台）：自动全部接受，不阻塞流程
+    - 非交互环境（Web 后台无video_id）：自动全部接受，不阻塞流程
     """
     if not new_terms:
         return {}
+
+    # Web UI模式：使用TermManager等待前端确认
+    if video_id:
+        from .term_manager import get_term_manager
+        term_manager = get_term_manager()
+        print(f"检测到 {len(new_terms)} 个新术语，等待网页确认...")
+        return term_manager.set_pending_terms(video_id, new_terms)
 
     # 非交互环境：自动接受，避免在 Web 后台线程阻塞等待 stdin
     if not _is_interactive():
@@ -252,6 +260,9 @@ def add_subtitle(
     def update_progress(percent: int, message: str):
         if progress_callback:
             progress_callback(percent, message)
+
+    # video_id 用于术语确认交互
+    video_id = record.get('id') or orig_id
 
     need_subtitle = record.get('subtitle_lang')
     subtitle_title_map = {'en': '英字', 'cn': '中字', 'bilingual': '双字'}
@@ -889,12 +900,14 @@ def _download_track(
 def translate_and_merge(
     primary: Dict[str, str],
     make_bilingual: bool,
+    video_id: str = None,
     progress_callback: Optional[Callable[[int, str], None]] = None,
 ) -> Dict[str, str]:
     """用 LLM 翻译字幕（并按需合并成双语）。
 
     primary: {'lang','path','code'} 已下载到的字幕（通常是英文）。
     make_bilingual: True 生成双语（原文+译文合并），False 只输出译文。
+    video_id: 视频ID，用于术语确认交互。
     """
     def update_progress(percent: int, message: str):
         if progress_callback:
@@ -904,6 +917,18 @@ def translate_and_merge(
     src_kind = primary['lang']
     other = 'cn' if src_kind == 'en' else 'en'
     base = _srt_base(src_path)
+
+    # 检查缓存：是否已有翻译后的字幕文件
+    if not make_bilingual:
+        translated_path = f"{base}.{other}.srt"
+        if os.path.exists(translated_path):
+            print(f"已存在翻译字幕，跳过翻译: {translated_path}")
+            return {'lang': other, 'path': translated_path, 'code': other}
+    else:
+        merged_path = f"{base}.{primary.get('code', src_kind)}_{other}.srt"
+        if os.path.exists(merged_path):
+            print(f"已存在双语字幕，跳过翻译: {merged_path}")
+            return {'lang': 'bilingual', 'path': merged_path, 'code': f"{primary.get('code', src_kind)}_{other}"}
 
     # 加载 LLM 配置
     llm_config = LLMConfig()
@@ -929,7 +954,7 @@ def translate_and_merge(
             new_terms = _extract_terms_llm(subtitle_text, glossary, llm_client)
 
             if new_terms:
-                accepted = _confirm_new_terms(new_terms)
+                accepted = _confirm_new_terms(new_terms, video_id=video_id)
                 if accepted:
                     glossary.update(accepted)
                     _save_glossary(glossary)
@@ -989,21 +1014,21 @@ def download_subtitles(
         # 拿到的不是英文，且下载不到英文 —— 需要翻译
         if not allow_translate:
             return {**primary, 'need_translate': True, 'target': 'en', 'make_bilingual': False}
-        return translate_and_merge(primary, make_bilingual=False, progress_callback=progress_callback)
+        return translate_and_merge(primary, make_bilingual=False, video_id=video_id, progress_callback=progress_callback)
 
     if need_subtitle == 'cn':
         if primary['lang'] == 'cn':
             return primary
         if not allow_translate:
             return {**primary, 'need_translate': True, 'target': 'cn', 'make_bilingual': False}
-        return translate_and_merge(primary, make_bilingual=False, progress_callback=progress_callback)
+        return translate_and_merge(primary, make_bilingual=False, video_id=video_id, progress_callback=progress_callback)
 
     # ---- 双语：优先用 LLM 翻译另一种语言（YouTube 自动翻译的中文质量很差）----
     if need_subtitle in ('bilingual', 'both'):
         if allow_translate and _llm_enabled():
             print('检测到 LLM 可用，双语字幕走模型翻译（跳过 YouTube 自动翻译的字幕）')
             try:
-                return translate_and_merge(primary, make_bilingual=True, progress_callback=progress_callback)
+                return translate_and_merge(primary, make_bilingual=True, video_id=video_id, progress_callback=progress_callback)
             except Exception as e:
                 print(f'LLM 翻译失败，回退下载另一语言字幕: {e}')
 
@@ -1024,7 +1049,7 @@ def download_subtitles(
         # 下载不到另一种语言 —— 需要用模型翻译后合并
         if not allow_translate:
             return {**primary, 'need_translate': True, 'target': 'cn', 'make_bilingual': True}
-        return translate_and_merge(primary, make_bilingual=True, progress_callback=progress_callback)
+        return translate_and_merge(primary, make_bilingual=True, video_id=video_id, progress_callback=progress_callback)
 
     return primary
 

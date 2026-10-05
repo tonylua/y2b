@@ -202,11 +202,95 @@ function startProgressPolling() {
     }, 1000);
 }
 
+function checkPendingTerms(videoId) {
+    $.ajax({
+        url: '/api/pending_terms/' + videoId,
+        type: 'GET',
+        dataType: 'json',
+        success: function(data) {
+            if (data && data.terms) {
+                showTermsModal(videoId, data.terms);
+            }
+        },
+        error: function() {
+            // 404表示没有待确认术语，正常情况
+        }
+    });
+}
+
+function showTermsModal(videoId, terms) {
+    var modalHtml = `
+        <div class="modal fade" id="termsModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">确认专业术语（检测到 ${Object.keys(terms).length} 个）</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <p>请确认以下术语的翻译是否正确：</p>
+                        <div id="termsList" style="max-height: 400px; overflow-y: auto;">
+                            ${Object.entries(terms).map(([en, zh], idx) => `
+                                <div class="form-check" style="padding: 8px; border-bottom: 1px solid #eee;">
+                                    <input class="form-check-input" type="checkbox" id="term_${idx}" value="${en}" checked>
+                                    <label class="form-check-label" for="term_${idx}" style="cursor: pointer;">
+                                        <strong>${en}</strong> → ${zh}
+                                    </label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="confirmTerms('${videoId}', {})">全部跳过</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmSelectedTerms('${videoId}', ${JSON.stringify(terms).replace(/'/g, "\\'")})" data-terms='${JSON.stringify(terms)}'>确认选中</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 移除旧模态框
+    $('#termsModal').remove();
+    $('body').append(modalHtml);
+    $('#termsModal').modal('show');
+}
+
+function confirmSelectedTerms(videoId, allTerms) {
+    var accepted = {};
+    $('#termsList input[type="checkbox"]:checked').each(function() {
+        var en = $(this).val();
+        accepted[en] = allTerms[en];
+    });
+    confirmTerms(videoId, accepted);
+}
+
+function confirmTerms(videoId, acceptedTerms) {
+    $.ajax({
+        url: '/api/confirm_terms/' + videoId,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({accepted_terms: acceptedTerms}),
+        success: function() {
+            $('#termsModal').modal('hide');
+        },
+        error: function() {
+            alert('提交失败，请重试');
+        }
+    });
+}
+
 function updateProgressUI(progress) {
     var progressPercent = Math.min(Math.max(progress.progress || 0, 0), 100);
     var progressBar = $('#progressBar');
     progressBar.css('width', progressPercent + '%');
     progressBar.attr('aria-valuenow', progressPercent);
+
+    // 检测待确认术语
+    if (currentVideoId && progress.message && progress.message.includes('等待网页确认')) {
+        checkPendingTerms(currentVideoId);
+    }
 
     if (progress.error) {
         $('#progressText').html('<span class="text-danger">错误: ' + progress.error + '</span>');

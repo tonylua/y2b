@@ -115,5 +115,25 @@ def get_all_download_progress():
     all_progress = download_progress.get_all_progress()
     return jsonify(list(all_progress.values()))
 
+@app.route('/api/pending_terms/<video_id>', methods=['GET'])
+def get_pending_terms(video_id):
+    """获取待确认术语"""
+    from utils.term_manager import get_term_manager
+    term_manager = get_term_manager()
+    terms = term_manager.get_pending_terms(video_id)
+    if terms:
+        return jsonify({'terms': terms})
+    return '', 404
+
+@app.route('/api/confirm_terms/<video_id>', methods=['POST'])
+def confirm_terms(video_id):
+    """提交确认的术语"""
+    from utils.term_manager import get_term_manager
+    term_manager = get_term_manager()
+    data = request.get_json()
+    accepted_terms = data.get('accepted_terms', {})
+    term_manager.confirm_terms(video_id, accepted_terms)
+    return jsonify({'status': 'ok'})
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=args.port)
