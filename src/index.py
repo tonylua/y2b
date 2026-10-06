@@ -135,5 +135,12 @@ def confirm_terms(video_id):
     term_manager.confirm_terms(video_id, accepted_terms)
     return jsonify({'status': 'ok'})
 
+@app.route('/api/proxy/status', methods=['GET'])
+def get_proxy_status():
+    """获取代理状态"""
+    from utils.proxy_checker import check_proxy_status
+    status = check_proxy_status()
+    return jsonify(status)
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=args.port)
