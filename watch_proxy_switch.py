@@ -20,22 +20,26 @@ def switch_proxy_node():
     log("检测到节点切换请求，正在切换...")
 
     try:
-        # 调用现有的 v2ray 自动更新脚本
-        # 发送 SIGUSR1 信号触发节点更换
+        # 直接执行 v2ray 自动更新脚本
         result = subprocess.run(
-            ["pkill", "-USR1", "-f", "v2ray_auto_update.py"],
+            ["/usr/local/bin/python3", "/root/.nullclaw/workspace/v2ray_auto_update.py"],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=120  # 最多等待2分钟
         )
 
         if result.returncode == 0:
-            log("节点切换信号已发送")
+            log("节点切换成功")
+            log(f"输出: {result.stdout[-200:]}")  # 最后200字符
             return True
         else:
-            log(f"发送信号失败: {result.stderr}")
+            log(f"节点切换失败 (退出码: {result.returncode})")
+            log(f"错误: {result.stderr[-200:]}")
             return False
 
+    except subprocess.TimeoutExpired:
+        log("节点切换超时（超过2分钟）")
+        return False
     except Exception as e:
         log(f"切换失败: {e}")
         return False
