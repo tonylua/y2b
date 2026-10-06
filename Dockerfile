@@ -17,6 +17,7 @@ COPY cli ./cli
 COPY db ./db
 COPY forms ./forms
 COPY static ./static
+COPY config ./config
 COPY upgrade_yt_dlp.py ./
 COPY upgrade_bilibili_api.py ./
 
