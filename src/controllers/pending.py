@@ -23,7 +23,10 @@ def fetch_pending_list():
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         video_info = ydl.extract_info(url, download=False)
-    
+
+    if video_info is None:
+        return jsonify({'error': 'Failed to fetch playlist. Please check proxy and network connection.'}), 500
+
     entries = video_info.get('entries', [])
     video_data = [{
         'title': entry.get('title'),
