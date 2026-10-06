@@ -35,6 +35,7 @@ def base_ydl_opts():
     - remote_components: 启用 ejs 远程 solver 脚本（从 GitHub 拉取并缓存），
       配合运行时求解 n-challenge，否则部分格式缺失。
     - proxy: Docker 容器内使用代理访问 YouTube
+    - cookiefile: 使用 YouTube cookies 绕过 bot 检测
     """
     import os
 
@@ -45,9 +46,19 @@ def base_ydl_opts():
         'concurrent_fragment_downloads': 8,
     }
 
-    # 仅在 Docker 容器内使用 SOCKS5 代理
+    # 仅在 Docker 容器内使用代理
     if os.path.exists('/.dockerenv'):
-        opts['proxy'] = 'socks5://127.0.0.1:1080'
+        # 不使用 proxy 选项（PySocks 有问题），改用环境变量
+        os.environ['HTTP_PROXY'] = 'socks5://127.0.0.1:1080'
+        os.environ['HTTPS_PROXY'] = 'socks5://127.0.0.1:1080'
+        os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:1080'
+
+        # 使用 YouTube cookies 文件（如果存在且不为空）
+        cookie_file = join_root_path('config/youtube_cookies.txt')
+        if os.path.exists(cookie_file):
+            # 检查文件大小，只有真实 cookies 才使用
+            if os.path.getsize(cookie_file) > 500:  # 真实 cookies 文件通常 > 1KB
+                opts['cookiefile'] = cookie_file
 
     return opts
 
