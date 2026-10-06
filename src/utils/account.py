@@ -42,7 +42,7 @@ def base_ydl_opts():
     opts = {
         'js_runtimes': {
             'deno': {'path': None},
-            'node': {'path': '/usr/bin/node'}  # 明确指定 node 路径
+            'node': {'path': '/usr/bin/node' if os.path.exists('/.dockerenv') else None}
         },
         'remote_components': ['ejs:github'],
         # 并发下载 DASH 分片，绕开单连接限速提速；8 为稳妥值，过高可能触发更激进限速
