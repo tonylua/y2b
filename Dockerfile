@@ -20,11 +20,24 @@ COPY static ./static
 COPY upgrade_yt_dlp.py ./
 COPY upgrade_bilibili_api.py ./
 
-# 安装新依赖（使用已配置的阿里云镜像源）
-RUN python -m pip install --no-cache-dir \
-    'openai>=1.0.0' \
-    'httpx==0.28.1' \
-    'srt==3.5.3'
+# 清除所有代理环境变量并安装新依赖
+RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY && \
+    rm -rf /root/.pip /root/.config/pip /opt/venv/pip.conf && \
+    python -m pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    python -m pip config set install.trusted-host mirrors.aliyun.com && \
+    python -m pip install --no-cache-dir \
+        'openai>=1.0.0' \
+        'httpx==0.28.1' \
+        'srt==3.5.3' \
+        'PySocks>=1.7.0'
+
+# 清除环境变量（让应用自行决定是否使用代理）
+ENV http_proxy="" \
+    https_proxy="" \
+    HTTP_PROXY="" \
+    HTTPS_PROXY="" \
+    no_proxy="" \
+    NO_PROXY=""
 
 # 配置端口
 ARG PORT=5000
