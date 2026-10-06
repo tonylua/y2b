@@ -20,6 +20,9 @@ COPY static ./static
 COPY upgrade_yt_dlp.py ./
 COPY upgrade_bilibili_api.py ./
 
+# 安装 nodejs（yt-dlp 需要 JS runtime 解决 YouTube 验证挑战）
+RUN apk add --no-cache nodejs npm
+
 # 清除所有代理环境变量并安装新依赖
 RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY && \
     rm -rf /root/.pip /root/.config/pip /opt/venv/pip.conf && \
