@@ -25,7 +25,7 @@ def switch_proxy_node():
             ["/usr/local/bin/python3", "/root/.nullclaw/workspace/v2ray_auto_update.py"],
             capture_output=True,
             text=True,
-            timeout=120  # 最多等待2分钟
+            timeout=300  # 增加到5分钟
         )
 
         if result.returncode == 0:
