@@ -24,11 +24,6 @@ COPY upgrade_bilibili_api.py ./
 # 安装 nodejs（yt-dlp 需要 JS runtime 解决 YouTube 验证挑战）
 RUN apk add --no-cache nodejs npm
 
-# 配置 yt-dlp 使用 node 作为 JS runtime
-RUN mkdir -p /root/.config/yt-dlp && \
-    echo "--js-runtimes node" > /root/.config/yt-dlp/config && \
-    echo "--remotecomponents ejs:github" >> /root/.config/yt-dlp/config
-
 # 清除所有代理环境变量并安装新依赖
 RUN unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY && \
     rm -rf /root/.pip /root/.config/pip /opt/venv/pip.conf && \
