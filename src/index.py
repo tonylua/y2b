@@ -142,5 +142,12 @@ def get_proxy_status():
     status = check_proxy_status()
     return jsonify(status)
 
+@app.route('/api/proxy/switch', methods=['POST'])
+def switch_proxy_node():
+    """触发代理节点更换"""
+    from utils.proxy_checker import trigger_node_switch
+    result = trigger_node_switch()
+    return jsonify(result)
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=args.port)
