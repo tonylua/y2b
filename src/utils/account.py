@@ -30,6 +30,7 @@ def base_ydl_opts():
     yt-dlp 的基础配置，供信息提取与下载共用。
 
     Docker 环境特殊配置：
+    - js_runtimes: 指定 JS 运行时（Docker 中有 nodejs）
     - proxy: 使用宿主机的 SOCKS5 代理访问 YouTube
     - remote_components: 启用 ejs 远程 solver 脚本（从 GitHub 拉取并缓存）
     """
@@ -42,6 +43,7 @@ def base_ydl_opts():
 
     # 仅在 Docker 容器内使用特殊配置
     if os.path.exists('/.dockerenv'):
+        opts['js_runtimes'] = {'deno': {'path': None}, 'node': {'path': None}}
         opts['proxy'] = 'socks5://127.0.0.1:1080'
         opts['remote_components'] = ['ejs:github']
 
