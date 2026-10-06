@@ -29,23 +29,25 @@ def base_ydl_opts():
     """
     yt-dlp 的基础配置，供信息提取与下载共用。
 
-    Docker 环境特殊配置：
-    - js_runtimes: 指定 JS 运行时（Docker 中有 nodejs）
-    - proxy: 使用宿主机的 SOCKS5 代理访问 YouTube
-    - remote_components: 启用 ejs 远程 solver 脚本（从 GitHub 拉取并缓存）
+    - js_runtimes: 指定 JS 运行时。新版 yt-dlp 提取 YouTube 需要 JS 运行时来解
+      challenge，缺失时会退化到弱客户端并误报 "This video is not available"。
+      保留 deno 作默认，追加复用系统已有的 node。
+    - remote_components: 启用 ejs 远程 solver 脚本（从 GitHub 拉取并缓存），
+      配合运行时求解 n-challenge，否则部分格式缺失。
+    - proxy: Docker 容器内使用代理访问 YouTube
     """
     import os
 
     opts = {
+        'js_runtimes': {'deno': {'path': None}, 'node': {'path': None}},
+        'remote_components': ['ejs:github'],
         # 并发下载 DASH 分片，绕开单连接限速提速；8 为稳妥值，过高可能触发更激进限速
         'concurrent_fragment_downloads': 8,
     }
 
-    # 仅在 Docker 容器内使用特殊配置
+    # 仅在 Docker 容器内使用 SOCKS5 代理
     if os.path.exists('/.dockerenv'):
-        opts['js_runtimes'] = {'deno': {'path': None}, 'node': {'path': None}}
         opts['proxy'] = 'socks5://127.0.0.1:1080'
-        opts['remote_components'] = ['ejs:github']
 
     return opts
 
