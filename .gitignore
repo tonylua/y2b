@@ -10,3 +10,9 @@ config/_*.json
 .tmp*
 *.bak
 logs
+
+# Python package metadata
+*.egg-info/
+.eggs/
+dist/
+build/

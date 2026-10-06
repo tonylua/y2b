@@ -1,34 +1,35 @@
-FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-alpine-linuxarm64
+# y2b Dockerfile for ARM64 (Orange Pi Zero 3)
+# 增量升级方式：基于已有镜像添加新依赖
+# 适用于网络受限环境
+
+FROM flask-y2b:latest
 
 WORKDIR /app
 
 USER root
 
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
-RUN apk add --no-cache --update-cache ffmpeg
-RUN apk add --no-cache --update-cache git
-RUN apk add --no-cache --update-cache vim
-RUN mkdir -p /usr/share/fonts/ukai
-# https://github.com/SilentByte/fonts-arphic-ukai/raw/master/fonts-arphic-ukai/ukai.ttc
-ADD ./static/ukai.ttc /usr/share/fonts/ukai/
+# 清理旧代码
+RUN rm -rf /app/src /app/cli
 
-ENV VIRTUAL_ENV=/opt/venv
-RUN python -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+# 复制新代码
+COPY src ./src
+COPY cli ./cli
+COPY db ./db
+COPY forms ./forms
+COPY static ./static
+COPY upgrade_yt_dlp.py ./
+COPY upgrade_bilibili_api.py ./
 
-RUN pip config set global.index-url http://mirrors.aliyun.com/pypi/simple/
-RUN pip config set install.trusted-host mirrors.aliyun.com
-RUN pip install flask[async]
+# 安装新依赖（使用已配置的阿里云镜像源）
+RUN python -m pip install --no-cache-dir \
+    'openai>=1.0.0' \
+    'httpx==0.28.1' \
+    'srt==3.5.3'
 
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-# RUN pip install git+https://github.com/Nemo2011/bilibili-api.git#main
-RUN pip install git+https://gitee.com/nemo2011/bilibili-api.git#main
-
-COPY . /app
-RUN python db/init_db.py
-
+# 配置端口
 ARG PORT=5000
 ENV PORT=${PORT}
 EXPOSE ${PORT}
+
+# 启动命令
 ENTRYPOINT ["sh", "-c", "python src/index.py --port $PORT"]
