@@ -136,9 +136,7 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\.cache\huggingface\hub\models--Hel
 uv sync
 ```
 
-注意：`uv cache clean` 是全局的，会清掉**其他项目**共用的 torch 轮子（下次要重新
-下载 1GB+），本项目清理不需要它。Docker 部署无需清理——旧镜像是按 requirements.txt
-构建的，用新 Dockerfile 重建镜像即可。
+注意：`uv cache clean` 是全局的，会清掉**其他项目**共用的 torch 轮子（下次要重新下载 1GB+），本项目清理不需要它。
 
 ## 上传后自动加入合集
 
@@ -158,25 +156,6 @@ uv sync
 - 查看账号下所有合集及其 `season_id`：`python cli/seasons.py`
 - 该文件被 gitignore（账号相关），每台部署机各自配置。
 - 加合集失败只打日志、不影响上传结果；找不到合集/取不到 cid 时会输出原因。
-
-## Docker
-
-```bash
-# 代理配置见 ~/.docker/config.json 的 "proxies"，httpProxy/httpsProxy 指向本地代理
-
-# 构建（非 pi 用 -f Dockerfile-amd64）
-docker build --network=host -t flask-y2b:<VERSION> .
-
-# 运行（--restart always 和 --rm 二选一）
-docker run --restart always --net host -p 5000:5000 -e PORT=5000 \
-  -v /root/move_video/static:/app/static \
-  -v /root/move_video/config:/app/config \
-  -v /root/move_video/db:/app/db \
-  -d flask-y2b:<VERSION>
-
-docker stats <containerId>    # 运行状态
-docker logs -f <containerId>  # 实时输出
-```
 
 ## DB
 

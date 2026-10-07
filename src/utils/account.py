@@ -34,7 +34,6 @@ def base_ydl_opts():
       保留 deno 作默认，追加复用系统已有的 node。
     - remote_components: 启用 ejs 远程 solver 脚本（从 GitHub 拉取并缓存），
       配合运行时求解 n-challenge，否则部分格式缺失。
-    - proxy: Docker 容器内使用代理访问 YouTube
     - cookiefile: 使用 YouTube cookies 绕过 bot 检测
     """
     import os
@@ -42,26 +41,19 @@ def base_ydl_opts():
     opts = {
         'js_runtimes': {
             'deno': {'path': None},
-            'node': {'path': '/usr/bin/node' if os.path.exists('/.dockerenv') else None}
+            'node': {'path': None}
         },
         'remote_components': ['ejs:github'],
         # 并发下载 DASH 分片，绕开单连接限速提速；8 为稳妥值，过高可能触发更激进限速
         'concurrent_fragment_downloads': 8,
     }
 
-    # 仅在 Docker 容器内使用代理
-    if os.path.exists('/.dockerenv'):
-        # 不使用 proxy 选项（PySocks 有问题），改用环境变量
-        os.environ['HTTP_PROXY'] = 'socks5://127.0.0.1:1080'
-        os.environ['HTTPS_PROXY'] = 'socks5://127.0.0.1:1080'
-        os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:1080'
-
-        # 使用 YouTube cookies 文件（如果存在且不为空）
-        cookie_file = join_root_path('config/youtube_cookies.txt')
-        if os.path.exists(cookie_file):
-            # 检查文件大小，只有真实 cookies 才使用
-            if os.path.getsize(cookie_file) > 500:  # 真实 cookies 文件通常 > 1KB
-                opts['cookiefile'] = cookie_file
+    # 使用 YouTube cookies 文件（如果存在且不为空）
+    cookie_file = join_root_path('config/youtube_cookies.txt')
+    if os.path.exists(cookie_file):
+        # 检查文件大小，只有真实 cookies 才使用
+        if os.path.getsize(cookie_file) > 500:  # 真实 cookies 文件通常 > 1KB
+            opts['cookiefile'] = cookie_file
 
     return opts
 
@@ -131,6 +123,11 @@ class AccountUtil:
                 cookie = json.load(f)
             self.uid = cookie['uid']
             self.session = requests.session()
+            # 禁用代理，直接连接 Bilibili（避免 SOCKS 代理导致的 SSL 错误）
+            self.session.proxies = {
+                'http': None,
+                'https': None,
+            }
             self.session.cookies['SESSDATA'] = cookie['SESSDATA']
             self.session.cookies['bili_jct'] = cookie['bili_jct']
             self.session.cookies['buvid3'] = cookie['buvid3']

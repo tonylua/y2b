@@ -138,7 +138,7 @@ def plan_hf_cleanup(execute: bool) -> int:
                       f'({human(dir_size(child))})')
 
     if not found_any:
-        print('  未发现 opus-mt 模型缓存（可能已清理，或当时在 Docker 内运行）')
+        print('  未发现 opus-mt 模型缓存（可能已清理或已在其他机器上运行过）')
     return freed
 
 

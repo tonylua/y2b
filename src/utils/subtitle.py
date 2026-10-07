@@ -593,7 +593,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 def _subtitle_fonts() -> Dict[str, str]:
-    """字幕字体：中文固定用仓库内置的 ukai.ttc（Windows/Docker 渲染一致），
+    """字幕字体：中文固定用仓库内置的 ukai.ttc（确保渲染一致），
     英文用系统无衬线字体。想换中文字体只需改这里的 cn 值。
     """
     return {
